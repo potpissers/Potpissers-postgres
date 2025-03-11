@@ -949,14 +949,3 @@ WITH valid_deathbans AS (SELECT death_id FROM deathbans WHERE expiration > NOW()
 DELETE
 FROM current_deathbans
 WHERE deathban_id NOT IN (SELECT death_id FROM valid_deathbans);
-
--- SELECT SUM(value_in_cents) AS total_value_in_cents
--- FROM successful_transactions
---          JOIN line_items ON successful_transactions.line_item_id = line_items.id
--- WHERE user_uuid = ?
---   AND NOT is_plural
-
--- SELECT rank_name
--- FROM current_parties_members
---          JOIN party_ranks ON current_parties_members.rank_id = party_ranks.id
--- WHERE user_uuid = ?
