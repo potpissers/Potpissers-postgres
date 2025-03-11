@@ -238,8 +238,8 @@ CREATE TABLE IF NOT EXISTS online_players
 DROP TABLE attack_speeds;
 CREATE TABLE attack_speeds
 (
-    id              INTEGER PRIMARY KEY,
-    name            TEXT NOT NULL
+    id   INTEGER PRIMARY KEY,
+    name TEXT NOT NULL
 );
 INSERT INTO attack_speeds (id, name)
 VALUES (0, 'vanilla'),
@@ -438,8 +438,8 @@ CREATE TABLE IF NOT EXISTS user_current_punishments
 DROP TABLE party_ranks;
 CREATE TABLE party_ranks
 (
-    id    INTEGER PRIMARY KEY,
-    name  TEXT    NOT NULL
+    id   INTEGER PRIMARY KEY,
+    name TEXT NOT NULL
 );
 INSERT INTO party_ranks (id, name)
 VALUES (0, 'member'),
@@ -960,8 +960,3 @@ WHERE deathban_id NOT IN (SELECT death_id FROM valid_deathbans);
 -- FROM current_parties_members
 --          JOIN party_ranks ON current_parties_members.rank_id = party_ranks.id
 -- WHERE user_uuid = ?
-
-SELECT name
-FROM chat_types
-         JOIN user_data ON id = user_data.chat_type_id
-WHERE user_uuid = ?
