@@ -215,7 +215,7 @@ VALUES (0, 'local'),
 CREATE TABLE IF NOT EXISTS user_data
 (
     user_uuid            UUID PRIMARY KEY,
-    chat_type_id         INTEGER,
+    chat_type_id         INTEGER DEFAULT '1', -- default -> all chat
     is_all_chat_disabled BOOLEAN DEFAULT FALSE,
     java_personal_mutes  BYTEA,
     party_uuid           UUID
@@ -239,22 +239,22 @@ DROP TABLE attack_speeds;
 CREATE TABLE attack_speeds
 (
     id              INTEGER PRIMARY KEY,
-    name            TEXT NOT NULL,
-    attribute_value DOUBLE PRECISION
+    name            TEXT NOT NULL
 );
-INSERT INTO attack_speeds (id, name, attribute_value)
-VALUES (0, 'vanilla', 4),
-       (1, 'reverted vanilla', 1.5999999046325684),
-       (2, '7cps', 9.25),
-       (3, 'uncapped', 1.7976931348623157e+308);
+INSERT INTO attack_speeds (id, name)
+VALUES (0, 'vanilla'),
+       (1, 'reverted vanilla'),
+       (2, '7cps'),
+       (3, '12cps'),
+       (4, 'uncapped');
 
 CREATE TABLE IF NOT EXISTS server_data
 (
     server_id                         INTEGER PRIMARY KEY,
-    attack_speed_id                   INTEGER NOT NULL,
-    death_ban_minutes                 INTEGER NOT NULL,
-    world_border_radius               INTEGER NOT NULL,
-    default_kit_name                  TEXT,
+    attack_speed_id                   INTEGER DEFAULT 2, -- default 7cps
+    death_ban_minutes                 INTEGER DEFAULT 0,
+    world_border_radius               INTEGER DEFAULT 1250,
+    default_kit_name                  TEXT    DEFAULT NULL,
     sharpness_limit                   INTEGER DEFAULT 0,
     power_limit                       INTEGER DEFAULT 0,
     protection_limit                  INTEGER DEFAULT 0,
@@ -439,14 +439,13 @@ DROP TABLE party_ranks;
 CREATE TABLE party_ranks
 (
     id    INTEGER PRIMARY KEY,
-    name  TEXT    NOT NULL,
-    level INTEGER NOT NULL
+    name  TEXT    NOT NULL
 );
-INSERT INTO party_ranks (id, name, level)
-VALUES (0, 'member', 0),
-       (1, 'officer', 1),
-       (2, 'co-leader', 2),
-       (3, 'leader', 3);
+INSERT INTO party_ranks (id, name)
+VALUES (0, 'member'),
+       (1, 'officer'),
+       (2, 'co-leader'),
+       (3, 'leader');
 
 CREATE TABLE IF NOT EXISTS party_invites
 (
@@ -957,7 +956,12 @@ WHERE deathban_id NOT IN (SELECT death_id FROM valid_deathbans);
 -- WHERE user_uuid = ?
 --   AND NOT is_plural
 
-SELECT rank_name
-FROM current_parties_members
-         JOIN party_ranks ON current_parties_members.rank_id = party_ranks.id
+-- SELECT rank_name
+-- FROM current_parties_members
+--          JOIN party_ranks ON current_parties_members.rank_id = party_ranks.id
+-- WHERE user_uuid = ?
+
+SELECT name
+FROM chat_types
+         JOIN user_data ON id = user_data.chat_type_id
 WHERE user_uuid = ?
