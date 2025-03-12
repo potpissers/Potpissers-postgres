@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS successful_transactions
     user_uuid             UUID    NOT NULL,
     line_item_id          INTEGER NOT NULL,
     line_item_player_name TEXT    NOT NULL,
+    line_item_quantity    INTEGER NOT NULL,
     amount_as_cents       INTEGER NOT NULL,
     timestamp             TIMESTAMPTZ DEFAULT NOW(),
     referrer              TEXT,
@@ -271,8 +272,7 @@ CREATE TABLE IF NOT EXISTS server_data
     off_peak_lives_needed_as_cents    INTEGER DEFAULT 100,
     bard_radius                       INTEGER DEFAULT 15,
     rogue_radius                      INTEGER DEFAULT 5,
-    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
-    FOREIGN KEY (attack_speed_id) REFERENCES attack_speeds (id)
+    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS player_attack_speeds
@@ -281,7 +281,6 @@ CREATE TABLE IF NOT EXISTS player_attack_speeds
     server_id       INTEGER,
     attack_speed_id INTEGER NOT NULL,
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
-    FOREIGN KEY (attack_speed_id) REFERENCES attack_speeds (id),
     PRIMARY KEY (user_uuid, server_id)
 );
 
