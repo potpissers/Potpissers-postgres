@@ -37,8 +37,7 @@ CREATE TABLE line_items
     value_in_cents INTEGER NOT NULL,
     description    TEXT    NOT NULL,
     is_plural      BOOLEAN NOT NULL,
-    chat_rank_id   INTEGER,
-    FOREIGN KEY (chat_rank_id) REFERENCES chat_ranks (id)
+    chat_rank_id   INTEGER
 );
 INSERT INTO line_items (id, game_mode_name, line_item_name, value_in_cents, description, is_plural)
 VALUES (0, 'hcf', 'life', 400,
@@ -193,8 +192,7 @@ CREATE TABLE IF NOT EXISTS successful_transactions
     line_item_quantity    INTEGER NOT NULL,
     amount_as_cents       INTEGER NOT NULL,
     timestamp             TIMESTAMPTZ DEFAULT NOW(),
-    referrer              TEXT,
-    FOREIGN KEY (line_item_id) REFERENCES line_items (id)
+    referrer              TEXT
 );
 
 DROP TABLE chat_types;
@@ -405,7 +403,6 @@ CREATE TABLE IF NOT EXISTS user_staff_ranks
     server_id    INTEGER,
     chat_rank_id INTEGER NOT NULL,
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
-    FOREIGN KEY (chat_rank_id) REFERENCES chat_ranks (id),
     PRIMARY KEY (user_uuid, server_id)
 );
 
