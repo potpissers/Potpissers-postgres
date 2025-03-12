@@ -185,8 +185,8 @@ VALUES ('potpissers', 'piglin combat logger',
 CREATE TABLE IF NOT EXISTS successful_transactions
 (
     id                    INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    square_order_id       TEXT UNIQUE,
-    transaction_hash      TEXT UNIQUE,
+    square_order_id       TEXT,
+    transaction_hash      TEXT,
     user_uuid             UUID    NOT NULL,
     line_item_id          INTEGER NOT NULL,
     line_item_player_name TEXT    NOT NULL,
