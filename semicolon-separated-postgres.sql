@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS user_referrals
 (
     user_uuid UUID PRIMARY KEY,
     referrer  TEXT,
-    timestamp TIMESTAMPTZ NOT NULL
+    timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 --TODO -> ip referrals, salt definitely necessary
 --TODO -> hash ips
@@ -947,3 +947,5 @@ WITH valid_deathbans AS (SELECT death_id FROM deathbans WHERE expiration > NOW()
 DELETE
 FROM current_deathbans
 WHERE deathban_id NOT IN (SELECT death_id FROM valid_deathbans);
+
+INSERT INTO user_referrals (user_uuid, ) VALUES (?) ON CONFLICT DO NOTHING
