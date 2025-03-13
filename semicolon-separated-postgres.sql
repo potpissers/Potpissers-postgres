@@ -947,5 +947,3 @@ WITH valid_deathbans AS (SELECT death_id FROM deathbans WHERE expiration > NOW()
 DELETE
 FROM current_deathbans
 WHERE deathban_id NOT IN (SELECT death_id FROM valid_deathbans);
-
-INSERT INTO user_referrals (user_uuid, ) VALUES (?) ON CONFLICT DO NOTHING
