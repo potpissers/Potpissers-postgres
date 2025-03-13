@@ -225,7 +225,7 @@ CREATE TABLE IF NOT EXISTS servers
 (
     id        INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name      TEXT UNIQUE NOT NULL,
-    timestamp TIMESTAMPTZ DEFAULT NOW()
+    timestamp TIMESTAMPTZ DEFAULT NOW() -- TODO (?) -> isWhitelisted
 );
 
 CREATE TABLE IF NOT EXISTS online_players
