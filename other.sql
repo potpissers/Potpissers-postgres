@@ -136,3 +136,15 @@ VALUES ('potpissers', 'piglin combat logger',
                     - class items: use /classitems
                     - mining past diamond ore thresholds upgrades your miner class'' abilities: use /classitems
                     - 50 ores mined: passive invisibility below y 16. 100 ores mined: passive fire resistance + water-breathing below y 16. 150 ores mined: passive speed 1 + sugar class item unlocked. 200 ores mined: feather/membrane class items unlocked. 250 ores mined: wheat class item unlocked + passive saturation below y 16, 300 ores mined: upgraded haste + miner''s fatigue class item unlocked. 350 ores mined: glow ink sac class item unlocked');
+CREATE OR REPLACE FUNCTION get_tips()
+    RETURNS TABLE
+            (
+                game_mode_name TEXT,
+                tip_title      TEXT,
+                tip_message    TEXT
+            )
+AS
+$$
+SELECT *
+FROM server_tips;
+$$ LANGUAGE sql;

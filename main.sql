@@ -1,3 +1,92 @@
+--TODO -> ip referrals, salt definitely necessary
+--TODO -> hash ips
+CREATE TABLE IF NOT EXISTS user_referrals
+(
+    user_uuid UUID PRIMARY KEY,
+    referrer  TEXT,
+    timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+DROP TABLE chat_ranks;
+CREATE TABLE chat_ranks
+(
+    id   INTEGER PRIMARY KEY,
+    name TEXT NOT NULL
+);
+INSERT INTO chat_ranks (id, name)
+VALUES (0, 'admin'),
+       (1, 'mod'),
+       (2, 'watcher'),
+
+       (3, 'unverified'),
+       (4, 'default'),
+       (5, 'basic'),
+       (6, 'gold'),
+       (7, 'diamond'),
+       (8, 'ruby'),
+       (9, 'big dog');
+
+DROP TABLE line_items;
+CREATE TABLE line_items
+(
+    id             INTEGER PRIMARY KEY,
+    game_mode_name TEXT    NOT NULL,
+    line_item_name TEXT    NOT NULL,
+    value_in_cents INTEGER NOT NULL,
+    description    TEXT    NOT NULL,
+    is_plural      BOOLEAN NOT NULL,
+    chat_rank_id   INTEGER
+);
+INSERT INTO line_items (id, game_mode_name, line_item_name, value_in_cents, description, is_plural)
+VALUES (0, 'hcf', 'life', 400,
+        '/revive (username). removes deathban (alts aren''t affected). current revive life cost: /lives', true),
+       (1, 'hcf', 'basic', 800, 'green name, basic server slot, and revive cost + deathban reduced to 80%', false),
+       (2, 'hcf', 'gold', 1600, 'yellow name, gold server slot, and revive cost + deathban reduced to 60%', false),
+       (3, 'hcf', 'diamond', 2400, 'aqua name, diamond server slot, and revive cost + deathban reduced to 40%', false),
+       (4, 'hcf', 'ruby', 3200, 'red name, ruby server slot, and revive cost + deathban reduced to 20%', false),
+       (5, 'mz', 'life', 400, '/revive (username). removes alt deathban', true),
+       (6, 'mz', 'basic', 600, 'green name, basic server slot', false),
+       (7, 'mz', 'gold', 1200, 'yellow name, gold server slot', false),
+       (8, 'mz', 'diamond', 1800, 'aqua name, diamond server slot', false),
+       (9, 'mz', 'ruby', 2400, 'red name, ruby server slot', false);
+
+CREATE TABLE IF NOT EXISTS successful_transactions
+(
+    id                    INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    square_order_id       TEXT,
+    transaction_hash      TEXT,
+    user_uuid             UUID    NOT NULL,
+    line_item_id          INTEGER NOT NULL,
+    line_item_player_name TEXT    NOT NULL,
+    line_item_quantity    INTEGER NOT NULL,
+    amount_as_cents       INTEGER NOT NULL,
+    timestamp             TIMESTAMPTZ DEFAULT NOW(),
+    referrer              TEXT
+);
+CREATE OR REPLACE FUNCTION get_donation_rank(
+    user_uuid UUID,
+    game_mode_name TEXT
+)
+    RETURNS TEXT
+AS
+$$
+WITH cte AS (SELECT COALESCE(SUM(value_in_cents), 0) AS total_value_in_cents
+             FROM successful_transactions
+                      JOIN line_items ON successful_transactions.line_item_id = line_items.id
+             WHERE successful_transactions.user_uuid = get_donation_rank.user_uuid
+               AND chat_rank_id IS NOT NULL
+               AND line_items.game_mode_name = get_donation_rank.game_mode_name)
+
+SELECT COALESCE((SELECT name
+                 FROM line_items
+                          JOIN chat_ranks ON line_items.chat_rank_id = chat_ranks.id
+                 WHERE user_uuid = get_donation_rank.user_uuid
+                   AND value_in_cents < cte.total_value_in_cents
+                 ORDER BY value_in_cents DESC
+                 LIMIT 1), 'default');
+$$
+    LANGUAGE sql;
+
 --TODO -> users id table (?)
 
 DROP TABLE attack_speeds;
@@ -64,6 +153,68 @@ CREATE TABLE IF NOT EXISTS server_data
     rogue_radius                      INTEGER DEFAULT 5,
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
+CREATE OR REPLACE FUNCTION upsert_server_return_data(
+    server_name TEXT
+)
+    RETURNS TABLE -- TODO record (?)
+            (
+                server_id                         INTEGER,
+                attack_speed_id                   INTEGER,
+                death_ban_minutes                 INTEGER,
+                world_border_radius               INTEGER,
+                default_kit_name                  TEXT,
+                sharpness_limit                   INTEGER,
+                power_limit                       INTEGER,
+                protection_limit                  INTEGER,
+                bard_regen_level                  INTEGER,
+                bard_strength_level               INTEGER,
+                is_weakness_enabled               BOOLEAN,
+                is_bard_passive_debuffing_enabled BOOLEAN,
+                dtr_freeze_timer                  INTEGER,
+                dtr_max                           REAL,
+                dtr_max_time                      INTEGER,
+                dtr_off_peak_freeze_time          INTEGER,
+                dtr_peak_freeze_time              INTEGER,
+                off_peak_lives_needed_as_cents    INTEGER,
+                bard_radius                       INTEGER,
+                rogue_radius                      INTEGER,
+
+                attack_speed_name                 TEXT
+            )
+AS
+$$
+WITH cte AS (
+    INSERT INTO servers (name)
+        VALUES (server_name)
+        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+        RETURNING id)
+INSERT
+INTO server_data (server_id)
+VALUES (cte.id)
+ON CONFLICT (server_id) DO UPDATE SET server_id = EXCLUDED.server_id
+RETURNING *,
+        (SELECT name FROM attack_speeds WHERE id = attack_speed_id) AS attack_speed_name;
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_server_death_ban_data(
+    death_ban_minutes INTEGER,
+    server_id INTEGER
+)
+AS
+$$
+UPDATE server_data
+SET death_ban_minutes = update_server_death_ban_data.death_ban_minutes
+WHERE server_id = update_server_death_ban_data.server_id;
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE upsert_server_attack_speed(
+    attack_speed_name TEXT,
+    server_id INTEGER
+)
+AS
+$$
+UPDATE server_data
+SET attack_speed_id = (SELECT id FROM attack_speeds WHERE name = attack_speed_name)
+WHERE server_id = upsert_server_attack_speed.server_id
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS player_attack_speeds
 (
@@ -111,6 +262,18 @@ CREATE TABLE IF NOT EXISTS loot_table_entries
     FOREIGN KEY (loot_table_id) REFERENCES loot_tables (id) ON DELETE CASCADE,
     PRIMARY KEY (loot_table_id, entry_name, entry_chance)
 );
+CREATE OR REPLACE PROCEDURE insert_loot_table_entry(
+    loot_table_id INTEGER,
+    entry_name TEXT,
+    entry_chance DOUBLE PRECISION
+)
+AS
+$$
+INSERT
+INTO loot_table_entries (loot_table_id, entry_name, entry_chance)
+VALUES (insert_loot_table_entry.loot_table_id, insert_loot_table_entry.entry_name, insert_loot_table_entry.entry_chance)
+ON CONFLICT (loot_table_id, entry_name, entry_chance) DO NOTHING
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS server_loot_chests
 (
@@ -129,6 +292,87 @@ CREATE TABLE IF NOT EXISTS server_loot_chests
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (server_id, world_name, x, y, z)
 );
+CREATE OR REPLACE FUNCTION get_server_loot_chests(
+    server_id INTEGER
+)
+    RETURNS TABLE
+            (
+                world_name      TEXT,
+                x               INTEGER,
+                y               INTEGER,
+                z               INTEGER,
+                loot_table_name TEXT,
+                min_amount      INTEGER,
+                loot_variance   INTEGER,
+                restock_time    INTEGER,
+                direction       TEXT,
+                block_type      TEXT
+            )
+AS
+$$
+SELECT world_name,
+       x,
+       y,
+       z,
+       loot_table_name,
+       min_amount,
+       loot_variance,
+       restock_time,
+       direction,
+       block_type
+FROM server_loot_chests
+         JOIN loot_tables ON server_loot_chests.loot_table_id = loot_tables.id
+WHERE server_loot_chests.server_id = get_server_loot_chests.server_id;
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE delete_server_loot_chest(
+    server_id INTEGER,
+    world_name TEXT,
+    x INTEGER,
+    y INTEGER,
+    z INTEGER
+)
+AS
+$$
+DELETE
+FROM server_loot_chests
+WHERE server_loot_chests.server_id = delete_server_loot_chest.server_id
+  AND server_loot_chests.world_name = delete_server_loot_chest.world_name
+  AND server_loot_chests.x = delete_server_loot_chest.x
+  AND server_loot_chests.y = delete_server_loot_chest.y
+  AND server_loot_chests.z = delete_server_loot_chest.z
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE upsert_loot_table_chest(
+    server_id INTEGER,
+    loot_table_name TEXT,
+    world_name TEXT,
+    x INTEGER,
+    y INTEGER,
+    z INTEGER,
+    min_amount INTEGER,
+    loot_variance INTEGER,
+    restock_time INTEGER,
+    direction TEXT,
+    block_type TEXT
+)
+AS
+$$
+WITH loot_table
+         AS (INSERT INTO loot_tables (server_id, loot_table_name) VALUES (upsert_loot_table_chest.server_id,
+                                                                          upsert_loot_table_chest.loot_table_name) ON CONFLICT (server_id, loot_table_name) DO UPDATE SET loot_table_name = EXCLUDED.loot_table_name RETURNING id)
+INSERT
+INTO server_loot_chests (server_id, world_name, x, y, z, loot_table_id, min_amount, loot_variance, restock_time,
+                         direction, block_type)
+VALUES (upsert_loot_table_chest.server_id, upsert_loot_table_chest.world_name, upsert_loot_table_chest.x,
+        upsert_loot_table_chest.y, upsert_loot_table_chest.z, loot_table.id, upsert_loot_table_chest.min_amount,
+        upsert_loot_table_chest.loot_variance,
+        upsert_loot_table_chest.restock_time, upsert_loot_table_chest.direction, upsert_loot_table_chest.block_type)
+ON CONFLICT (server_id, world_name, x, y, z) DO UPDATE SET loot_table_id = EXCLUDED.loot_table_id,
+                                                           min_amount    = EXCLUDED.min_amount,
+                                                           loot_variance = EXCLUDED.loot_variance,
+                                                           restock_time  = EXCLUDED.restock_time,
+                                                           direction     = EXCLUDED.restock_time,
+                                                           block_type    = EXCLUDED.block_type
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS playtimes
 (
@@ -146,6 +390,36 @@ CREATE TABLE IF NOT EXISTS ip_exempt_uuids
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (user_uuid, server_id)
 );
+CREATE OR REPLACE FUNCTION get_is_user_ip_exempt(
+    user_uuid UUID,
+    server_id INTEGER
+)
+    RETURNS BOOLEAN
+AS
+$$
+SELECT EXISTS(SELECT 1
+              FROM ip_exempt_uuids
+              WHERE ip_exempt_uuids.user_uuid = get_is_user_ip_exempt.user_uuid
+                AND ip_exempt_uuids.server_id = get_is_user_ip_exempt.server_id)
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION toggle_is_user_ip_exempt_return_result(
+    user_uuid UUID,
+    server_id INTEGER
+)
+    RETURNS BOOLEAN
+AS
+$$
+WITH insert
+         AS (INSERT INTO ip_exempt_uuids (user_uuid, server_id) VALUES (toggle_is_user_ip_exempt_return_result.user_uuid,
+                                                                        toggle_is_user_ip_exempt_return_result.server_id) ON CONFLICT DO UPDATE SET user_uuid = EXCLUDED.user_uuid RETURNING XMAX <> 0 AS exists)
+DELETE
+FROM ip_exempt_uuids
+WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
+  AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id
+  AND EXISTS (SELECT exists FROM insert WHERE exists = TRUE)
+RETURNING (SELECT exists FROM insert)
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS kits
 (
@@ -153,6 +427,34 @@ CREATE TABLE IF NOT EXISTS kits
     kit_name               TEXT UNIQUE NOT NULL,
     bukkit_default_loadout BYTEA       NOT NULL
 );
+CREATE OR REPLACE FUNCTION get_kit_names()
+    RETURNS TEXT[] AS
+$$
+SELECT ARRAY(
+               SELECT kit_name
+               FROM kits);
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE upsert_default_kit(
+    kit_name TEXT,
+    bukkit_default_loadout BYTEA
+)
+AS
+$$
+INSERT INTO kits (kit_name, bukkit_default_loadout)
+VALUES (upsert_default_kit.kit_name, upsert_default_kit.bukkit_default_loadout)
+ON CONFLICT (kit_name) DO UPDATE SET bukkit_default_loadout = EXCLUDED.bukkit_default_loadout
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_kit_bukkit_default_contents(
+    kit_name TEXT
+)
+    RETURNS BYTEA
+AS
+$$
+SELECT bukkit_default_loadout
+FROM kits
+WHERE bukkit_default_loadout.kit_name = get_kit_bukkit_default_contents.kit_name
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS server_consumable_kits
 (
@@ -164,6 +466,30 @@ CREATE TABLE IF NOT EXISTS server_consumable_kits
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (server_id, kit_name)
 );
+CREATE OR REPLACE FUNCTION get_server_consumable_kit_names(
+    server_id INTEGER
+)
+    RETURNS BOOLEAN
+AS
+$$
+SELECT kit_name
+FROM server_consumable_kits
+WHERE server_consumable_kits.server_id = get_server_consumable_kit_names.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE upsert_server_consumable_kit(
+    server_id INTEGER,
+    kit_name TEXT,
+    bukkit_kit_contents BYTEA,
+    cooldown INTEGER
+)
+AS
+$$
+INSERT INTO server_consumable_kits (server_id, kit_name, bukkit_kit_contents, cooldown)
+VALUES (upsert_server_consumable_kit.server_id, upsert_server_consumable_kit.kit_name,
+        upsert_server_consumable_kit.bukkit_kit_contents, upsert_server_consumable_kit.cooldown)
+ON CONFLICT (server_id, kit_name) DO UPDATE SET bukkit_kit_contents = EXCLUDED.bukkit_kit_contents,
+                                                cooldown            = EXCLUDED.cooldown
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS user_consumable_kits_history
 (
@@ -172,6 +498,18 @@ CREATE TABLE IF NOT EXISTS user_consumable_kits_history
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (user_uuid, kit_id, timestamp)
 );
+CREATE OR REPLACE FUNCTION foo(
+)
+    RETURNS BOOLEAN
+AS
+$$
+SELECT id, bukkit_kit_contents, cooldown, timestamp
+FROM server_consumable_kits
+         LEFT JOIN user_consumable_kits_history
+                   ON server_consumable_kits.id = user_consumable_kits_history.kit_id AND user_uuid = ?
+WHERE server_id = ?
+  AND kit_name = ?
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS user_personal_kits
 (
@@ -191,32 +529,130 @@ CREATE TABLE IF NOT EXISTS user_staff_ranks
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (user_uuid, server_id)
 );
-
-CREATE TABLE IF NOT EXISTS user_chat_mods
-(
+CREATE OR REPLACE FUNCTION get_user_staff_rank_name(
+    user_uuid UUID,
+    server_id INTEGER
+)
+    RETURNS TEXT
+AS
+$$
+SELECT name
+FROM user_staff_ranks
+         JOIN chat_ranks ON user_staff_ranks.chat_rank_id = chat_ranks.id
+WHERE user_staff_ranks.user_uuid = get_user_staff_rank_name.user_uuid
+  AND user_staff_ranks.server_id = get_user_staff_rank_name.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE upsert_user_staff_rank(
     user_uuid UUID,
     server_id INTEGER,
-    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
-    PRIMARY KEY (user_uuid, server_id)
-);
+    staff_rank_name TEXT
+)
+AS
+$$
+INSERT
+INTO user_staff_ranks (user_uuid, server_id, chat_rank_id)
+VALUES (upsert_user_staff_rank.user_uuid, upsert_user_staff_rank.server_id,
+        (SELECT id FROM chat_ranks WHERE name = staff_rank_name))
+ON CONFLICT (user_uuid, server_id) DO UPDATE SET chat_rank_id = EXCLUDED.chat_rank_id
+$$ LANGUAGE sql;
 
+DROP TABLE punishment_types;
+CREATE TABLE IF NOT EXISTS punishment_types
+(
+    id   INTEGER PRIMARY KEY,
+    name TEXT NOT NULL
+);
+VALUES (0, 'ban'),
+       (1, 'mute'),
+       (2, '7cps');
 CREATE TABLE IF NOT EXISTS user_punishments
 (
-    id               INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_uuid        UUID        NOT NULL,
-    server_id        INTEGER     NOT NULL,
-    is_mute_else_ban BOOLEAN     NOT NULL,
-    timestamp        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    reason           TEXT        NOT NULL,
-    expiration       TIMESTAMPTZ NOT NULL,
-    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
+    id                 INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_uuid          UUID        NOT NULL,
+    server_id          INTEGER     NOT NULL,
+    punishment_type_id INTEGER     NOT NULL,
+    timestamp          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    reason             TEXT        NOT NULL,
+    expiration         TIMESTAMPTZ NOT NULL,
+    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
+    FOREIGN KEY (punishment_type_id) REFERENCES punishment_types (id)
 );
+CREATE OR REPLACE FUNCTION get_farthest_user_punishment(
+    punishment_type_name TEXT,
+    user_uuid UUID,
+    server_id INTEGER
+)
+    RETURNS TABLE
+            (
+                expiration TIMESTAMPTZ,
+                reason     TEXT
+            )
+AS
+$$
+SELECT expiration, reason
+FROM user_punishments
+         JOIN punishment_types ON user_punishments.punishment_type_id = punishment_types.id
+WHERE name = punishment_type_name
+  AND user_punishments.user_uuid = get_farthest_user_punishment.user_uuid
+  AND user_punishments.server_id = get_farthest_user_punishment.server_id
+  AND expiration > NOW()
+ORDER BY expiration DESC
+LIMIT 1
+$$ LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS user_current_punishments
 (
     punishment_id INTEGER PRIMARY KEY,
     ip            TEXT,
     FOREIGN KEY (punishment_id) REFERENCES user_punishments (id)
 );
+CREATE OR REPLACE PROCEDURE insert_user_punishment(
+    user_uuid UUID,
+    server_id INTEGER,
+    punishment_type_name TEXT,
+    reason TEXT,
+    expiration TIMESTAMPTZ,
+    ip TEXT
+)
+AS
+$$
+WITH cte AS
+         (INSERT INTO user_punishments (user_uuid, server_id, punishment_type_id, reason, expiration) VALUES (insert_user_punishment.user_uuid,
+                                                                                                              insert_user_punishment.server_id,
+                                                                                                              (SELECT id FROM punishment_types WHERE name = punishment_type_name),
+                                                                                                              insert_user_punishment.reason,
+                                                                                                              insert_user_punishment.expiration) RETURNING id)
+INSERT
+INTO user_current_punishments (punishment_id, ip)
+VALUES (cte.id, insert_user_punishment.ip)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_farthest_user_ip_punishment(
+    user_uuid UUID,
+    ip TEXT,
+    server_id INTEGER,
+    punishment_type_name TEXT
+)
+    RETURNS TABLE
+            (
+                expiration TIMESTAMPTZ,
+                reason     TEXT
+            )
+AS
+$$
+SELECT expiration, reason
+FROM user_punishments
+         JOIN user_current_punishments ON user_punishments.id = user_current_punishments.punishment_id
+         JOIN punishment_types ON user_punishments.punishment_type_id = punishment_types.id
+WHERE user_punishments.user_uuid != get_farthest_user_ip_punishment.user_uuid
+  AND user_current_punishments.ip = get_farthest_user_ip_punishment.ip
+  AND user_punishments.server_id = get_farthest_user_ip_punishment.server_id
+  AND name = get_farthest_user_ip_punishment.punishment_type_name
+  AND (NOT EXISTS(SELECT *
+                  FROM ip_exempt_uuids
+                  WHERE ip_exempt_uuids.user_uuid = get_farthest_user_ip_punishment.user_uuid
+                    AND ip_exempt_uuids.server_id = get_farthest_user_ip_punishment.server_id))
+ORDER BY expiration DESC
+LIMIT 1
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS party_invites
 (
@@ -227,8 +663,50 @@ CREATE TABLE IF NOT EXISTS party_invites
     timestamp    TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (user_uuid, party_uuid)
 );
+CREATE OR REPLACE PROCEDURE delete_party_invite(
+    user_uuid UUID,
+    party_uuid UUID
+)
+AS
+$$
+DELETE
+FROM party_invites
+WHERE party_invites.user_uuid = delete_party_invite.user_uuid
+  AND party_invites.party_uuid = delete_party_invite.party_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_user_party_invite_rank_name(
+    user_uuid UUID,
+    party_uuid UUID
+)
+    RETURNS TEXT
+AS
+$$
+SELECT name
+FROM party_invites
+         JOIN party_ranks ON party_invites.rank_id = party_ranks.id
+WHERE party_invites.user_uuid = get_user_party_invite_rank_name.user_uuid
+  AND party_invites.party_uuid = get_user_party_invite_rank_name.party_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION upsert_party_invite(
+    user_uuid UUID,
+    party_uuid UUID,
+    inviter_uuid UUID,
+    rank_name TEXT
+)
+    RETURNS BOOLEAN
+AS
+$$
+INSERT
+INTO party_invites (user_uuid, party_uuid, inviter_uuid, rank_id)
+VALUES (upsert_party_invite.user_uuid, upsert_party_invite.party_uuid, upsert_party_invite.inviter_uuid,
+        (SELECT id FROM party_ranks WHERE name = rank_name))
+ON CONFLICT (user_uuid, party_uuid) DO UPDATE SET rank_id      = EXCLUDED.rank_id,
+                                                  inviter_uuid = EXCLUDED.inviter_uuid,
+                                                  timestamp    = NOW()
+    -- TODO -> make this return uuid if existed like ally etc
+$$ LANGUAGE sql;
 
-CREATE TABLE IF NOT EXISTS party_ally_invites
+CREATE TABLE IF NOT EXISTS ally_invites
 (
     inviter_party_uuid UUID,
     invited_party_uuid UUID,
@@ -236,6 +714,33 @@ CREATE TABLE IF NOT EXISTS party_ally_invites
     timestamp          TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (inviter_party_uuid, invited_party_uuid)
 );
+CREATE OR REPLACE FUNCTION get_is_ally_invited(
+    inviter_party_uuid UUID,
+    invited_party_uuid UUID
+)
+    RETURNS BOOLEAN
+AS
+$$
+SELECT EXISTS(SELECT *
+              FROM ally_invites
+              WHERE ally_invites.inviter_party_uuid = get_is_ally_invited.inviter_party_uuid
+                AND ally_invites.invited_party_uuid = get_is_ally_invited.invited_party_uuid)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION upsert_ally_invite_return_existed(
+    inviter_party_uuid UUID,
+    invited_party_uuid UUID,
+    inviter_user_uuid UUID
+)
+    RETURNS BOOLEAN
+AS
+$$
+INSERT INTO ally_invites (inviter_party_uuid, invited_party_uuid, inviter_user_uuid)
+VALUES (upsert_ally_invite_return_existed.inviter_party_uuid, upsert_ally_invite_return_existed.invited_party_uuid,
+        upsert_ally_invite_return_existed.inviter_user_uuid)
+ON CONFLICT (inviter_party_uuid, invited_party_uuid) DO UPDATE SET inviter_user_uuid = EXCLUDED.inviter_user_uuid,
+                                                                   timestamp         = NOW()
+RETURNING xmax <> 0 -- TODO -> make this return the uuid if it already existed
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS current_parties_relations
 (
@@ -244,6 +749,51 @@ CREATE TABLE IF NOT EXISTS current_parties_relations
     is_ally_else_enemy BOOLEAN NOT NULL,
     PRIMARY KEY (party_uuid, party_arg_uuid)
 );
+CREATE OR REPLACE PROCEDURE delete_party_relation(party_uuid UUID, party_arg_uuid UUID)
+AS
+$$
+DELETE
+FROM current_parties_relations
+WHERE current_parties_relations.party_uuid = delete_party_relation.party_uuid
+  AND current_parties_relations.party_arg_uuid = delete_party_relation.party_arg_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_party_relation_is_ally_else_enemy(
+    party_uuid UUID,
+    party_arg_uuid UUID
+)
+    RETURNS BOOLEAN
+AS
+$$
+SELECT is_ally_else_enemy
+FROM current_parties_relations
+WHERE current_parties_relations.party_uuid = get_party_relation_is_ally_else_enemy.party_uuid
+  AND current_parties_relations.party_arg_uuid = get_party_relation_is_ally_else_enemy.party_arg_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE insert_party_relation(
+    party_uuid UUID,
+    party_arg_uuid UUID,
+    is_ally_else_enemy BOOLEAN
+)
+AS
+$$
+INSERT INTO current_parties_relations (party_uuid, party_arg_uuid, is_ally_else_enemy)
+VALUES (insert_party_relation.party_uuid, insert_party_relation.party_arg_uuid,
+        insert_party_relation.is_ally_else_enemy)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_party_relations(
+    party_uuid UUID
+)
+    RETURNS TABLE
+            (
+                party_arg_uuid     UUID,
+                is_ally_else_enemy BOOLEAN
+            )
+AS
+$$
+SELECT party_arg_uuid, is_ally_else_enemy
+FROM current_parties_relations
+WHERE current_parties_relations.party_uuid = get_party_relations.party_uuid
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS current_parties_members
 (
@@ -251,8 +801,117 @@ CREATE TABLE IF NOT EXISTS current_parties_members
     party_uuid UUID    NOT NULL,
     rank_id    INTEGER NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS one_leader_per_party ON current_parties_members (party_uuid) WHERE rank_id = 4; -- party_ranks -> leader
-
+CREATE UNIQUE INDEX IF NOT EXISTS one_leader_per_party ON current_parties_members (party_uuid) WHERE rank_id = 4;
+-- party_ranks -> leader
+CREATE OR REPLACE FUNCTION get_party_leader_uuid(
+    party_uuid UUID
+)
+    RETURNS UUID
+AS
+$$
+SELECT user_uuid
+FROM current_parties_members
+         JOIN party_ranks on current_parties_members.rank_id = party_ranks.id
+WHERE current_parties_members.party_uuid = get_party_leader_uuid.party_uuid
+  AND name = 'leader'
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE handle_network_party_delete(party_uuid UUID)
+AS
+$$
+DELETE
+FROM current_parties_members
+WHERE current_parties_members.party_uuid = handle_network_party_delete.party_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_user_network_party_rank_name(
+    user_uuid UUID
+)
+    RETURNS TEXT
+AS
+$$
+SELECT name
+FROM current_parties_members
+         JOIN party_ranks ON current_parties_members.rank_id = party_ranks.id
+WHERE current_parties_members.user_uuid = get_user_network_party_rank_name.user_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_user_is_in_party(
+    user_uuid UUID,
+    party_uuid UUID
+)
+    RETURNS BOOLEAN
+AS
+$$
+SELECT EXISTS(SELECT *
+              FROM current_parties_members
+              WHERE current_parties_members.user_uuid = get_user_is_in_party.user_uuid
+                AND current_parties_members.party_uuid = get_user_is_in_party.party_uuid)
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE delete_user_party(
+    user_uuid UUID,
+    party_uuid UUID
+)
+AS
+$$
+DELETE
+FROM current_parties_members
+WHERE current_parties_members.user_uuid = delete_user_party.user_uuid
+  AND current_parties_members.party_uuid = delete_user_party.party_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_user_party_uuid(
+    user_uuid UUID
+)
+    RETURNS UUID
+AS
+$$
+SELECT party_uuid
+FROM current_parties_members
+WHERE current_parties_members.user_uuid = get_user_party_uuid.user_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE insert_current_parties_members_user(
+    user_uuid UUID,
+    party_uuid UUID,
+    party_rank_name TEXT
+)
+AS
+$$
+INSERT INTO current_parties_members (user_uuid, party_uuid, rank_id)
+VALUES (insert_current_parties_members_user.user_uuid, insert_current_parties_members_user.party_uuid,
+        (SELECT id FROM party_ranks WHERE name = party_rank_name))
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION handle_insert_party_member(
+    user_uuid UUID,
+    party_uuid UUID,
+    rank_name TEXT
+)
+    RETURNS BOOLEAN
+AS
+$$
+WITH _ AS (DELETE FROM party_invites WHERE party_invites.user_uuid = handle_insert_party_member.user_uuid AND
+                                           party_invites.party_uuid = handle_insert_party_member.party_uuid)
+INSERT
+INTO current_parties_members (user_uuid, party_uuid, rank_id)
+VALUES (handle_insert_party_member.user_uuid, handle_insert_party_member.party_uuid,
+        (SELECT id FROM party_ranks WHERE name = rank_name))
+ON CONFLICT (user_uuid) DO UPDATE SET rank_id = CASE
+                                                    WHEN current_parties_members.party_uuid = EXCLUDED.party_uuid
+                                                        THEN EXCLUDED.rank_id
+                                                    ELSE current_parties_members.rank_id END
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION handle_update_party_leader(
+    party_uuid UUID,
+    user_uuid UUID
+)
+    RETURNS BOOLEAN
+AS
+$$
+WITH _
+         AS (UPDATE current_parties_members SET rank_id = (SELECT id FROM party_ranks WHERE name = 'co_leader') WHERE
+        rank_id = (SELECT id FROM party_ranks WHERE name = 'leader') AND
+        party_uuid = handle_update_party_leader.party_uuid)
+UPDATE current_parties_members
+SET rank_id = (SELECT id FROM party_ranks WHERE name = 'leader')
+WHERE user_uuid = handle_update_party_leader.user_uuid
+  AND party_uuid = handle_update_party_leader.party_uuid
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS factions
 (
@@ -352,6 +1011,24 @@ CREATE TABLE IF NOT EXISTS user_fights
     fight_id  INTEGER NOT NULL,
     FOREIGN KEY (fight_id) REFERENCES fights (id) ON DELETE CASCADE
 );
+CREATE OR REPLACE FUNCTION insert_user_fight_return_id(
+    user_uuid UUID,
+    server_id INTEGER
+)
+    RETURNS INTEGER
+AS
+$$
+WITH cte AS (
+    INSERT INTO fights (fight_uuid, server_id)
+        VALUES (insert_user_fight_return_id.user_uuid, insert_user_fight_return_id.server_id)
+        ON CONFLICT (fight_uuid, server_id)
+            DO UPDATE SET fight_uuid = EXCLUDED.fight_uuid
+        RETURNING id)
+INSERT
+INTO user_fights (user_uuid, fight_id)
+VALUES (insert_user_fight_return_id.user_uuid, cte.id)
+RETURNING id
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS user_fights_data
 (
@@ -390,6 +1067,54 @@ CREATE TABLE IF NOT EXISTS user_deaths
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     FOREIGN KEY (victim_user_fight_id) REFERENCES user_fights (id) ON DELETE CASCADE
 );
+CREATE OR REPLACE FUNCTION insert_user_death_return_id(
+    server_id INTEGER,
+    victim_user_fight_id INTEGER,
+    victim_uuid UUID,
+    bukkit_victim_inventory BYTEA,
+    death_world TEXT,
+    death_x INTEGER,
+    death_y INTEGER,
+    death_z INTEGER,
+    death_message TEXT,
+    killer_uuid UUID, bukkit_kill_weapon BYTEA,
+    bukkit_killer_inventory BYTEA
+)
+    RETURNS INTEGER
+AS
+$$
+INSERT INTO user_deaths (server_id, victim_user_fight_id, victim_uuid,
+                         bukkit_victim_inventory,
+                         death_world, death_x, death_y, death_z, death_message,
+                         killer_uuid, bukkit_kill_weapon,
+                         bukkit_killer_inventory)
+VALUES (insert_user_death_return_id.server_id, insert_user_death_return_id.victim_user_fight_id,
+        insert_user_death_return_id.victim_uuid, insert_user_death_return_id.bukkit_victim_inventory,
+        insert_user_death_return_id.death_world, insert_user_death_return_id.death_x,
+        insert_user_death_return_id.death_y, insert_user_death_return_id.death_z,
+        insert_user_death_return_id.death_message, insert_user_death_return_id.killer_uuid,
+        insert_user_death_return_id.bukkit_kill_weapon, insert_user_death_return_id.bukkit_killer_inventory)
+RETURNING id
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_user_kill_streak(
+    victim_uuid UUID,
+    server_id INTEGER,
+    killer_uuid UUID
+)
+    RETURNS INTEGER
+AS
+$$
+WITH latest_death
+         AS (SELECT COALESCE(MAX(timestamp), '-infinity'::timestamptz) AS timestamp
+             FROM user_deaths
+             WHERE user_deaths.victim_uuid = get_user_kill_streak.victim_uuid
+               AND user_deaths.server_id = get_user_kill_streak.server_id)
+SELECT COUNT(*) AS kill_streak
+FROM user_deaths
+WHERE user_deaths.killer_uuid = get_user_kill_streak.killer_uuid
+  AND user_deaths.server_id = get_user_kill_streak.server_id
+  AND timestamp > (SELECT timestamp FROM latest_death)
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS current_heroes
 (
@@ -425,12 +1150,69 @@ CREATE TABLE IF NOT EXISTS deathbans
     expiration TIMESTAMPTZ NOT NULL,
     FOREIGN KEY (death_id) REFERENCES user_deaths (id) ON DELETE CASCADE
 );
+CREATE OR REPLACE FUNCTION get_farthest_user_death_ban(
+    victim_uuid UUID,
+    server_id INTEGER
+)
+    RETURNS TABLE
+            (
+                expiration    TIMESTAMPTZ,
+                death_message TEXT
+            )
+AS
+$$
+SELECT expiration, death_message
+FROM deathbans
+         JOIN user_deaths ON user_deaths.id = deathbans.death_id
+WHERE user_deaths.victim_uuid = get_farthest_user_death_ban.victim_uuid
+  AND user_deaths.server_id = get_farthest_user_death_ban.server_id
+  AND expiration > NOW()
+ORDER BY expiration DESC
+LIMIT 1
+$$ LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS current_deathbans
 (
     deathban_id INTEGER PRIMARY KEY,
     ip          TEXT,
     FOREIGN KEY (deathban_id) REFERENCES deathbans (death_id) ON DELETE CASCADE
 );
+CREATE OR REPLACE PROCEDURE insert_deathban(
+    ip TEXT
+)
+AS
+$$
+WITH cte AS (INSERT INTO deathbans (death_id, expiration) VALUES (?, ?) RETURNING id)
+INSERT
+INTO current_deathbans (deathban_id, ip)
+VALUES (cte.id, insert_deathban.ip);
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_farthest_user_ip_deathban(
+    user_uuid UUID,
+    ip TEXT,
+    server_id INTEGER
+)
+    RETURNS TABLE
+            (
+                expiration    TIMESTAMPTZ,
+                death_message TEXT
+            )
+AS
+$$
+SELECT expiration, death_message
+FROM deathbans
+         JOIN current_deathbans ON deathbans.death_id = current_deathbans.deathban_id
+         JOIN user_deaths ON deathbans.death_id = user_deaths.id
+WHERE victim_uuid != user_uuid
+  AND current_deathbans.ip = get_farthest_user_ip_deathban.ip
+  AND user_deaths.server_id = get_farthest_user_ip_deathban.server_id
+  AND (NOT EXISTS(SELECT *
+                  FROM ip_exempt_uuids
+                  WHERE ip_exempt_uuids.user_uuid = get_farthest_user_ip_deathban.user_uuid
+                    AND ip_exempt_uuids.server_id = get_farthest_user_ip_deathban.server_id))
+ORDER BY expiration DESC
+LIMIT 1
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS revives
 (
@@ -440,6 +1222,16 @@ CREATE TABLE IF NOT EXISTS revives
     reason    TEXT    NOT NULL,
     PRIMARY KEY (user_uuid, timestamp)
 );
+CREATE OR REPLACE PROCEDURE insert_revive(
+    user_uuid UUID,
+    server_id INTEGER,
+    reason TEXT
+)
+AS
+$$
+INSERT INTO revives (user_uuid, server_id, reason)
+VALUES (insert_revive.user_uuid, insert_revive.server_id, insert_revive.reason)
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS arena_data
 (
