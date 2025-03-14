@@ -194,6 +194,33 @@ CREATE TABLE IF NOT EXISTS successful_transactions
     timestamp             TIMESTAMPTZ DEFAULT NOW(),
     referrer              TEXT
 );
+CREATE OR REPLACE FUNCTION get_donation_rank(
+    user_uuid UUID,
+    game_mode_name TEXT
+)
+    RETURNS TEXT
+AS
+$$
+DECLARE
+    total_value_in_cents INT;
+BEGIN
+    SELECT COALESCE(SUM(value_in_cents), 0)
+    INTO total_value_in_cents
+    FROM successful_transactions
+             JOIN line_items ON successful_transactions.line_item_id = line_items.id
+    WHERE successful_transactions.user_uuid = get_donation_rank.user_uuid
+      AND chat_rank_id IS NOT NULL
+      AND line_items.game_mode_name = get_donation_rank.game_mode_name;
+
+    RETURN COALESCE((SELECT name
+                     FROM line_items
+                              JOIN chat_ranks ON line_items.chat_rank_id = chat_ranks.id
+                     WHERE user_uuid = get_donation_rank.user_uuid
+                       AND value_in_cents < total_value_in_cents
+                     ORDER BY value_in_cents DESC
+                     LIMIT 1), 'default'); -- surely doing case value 0 return 'default' is better, but I'm doing this
+END;
+$$ LANGUAGE plpgsql;
 
 DROP TABLE chat_types;
 CREATE TABLE chat_types
@@ -483,13 +510,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_leader_per_party ON current_parties_member
 
 CREATE TABLE IF NOT EXISTS factions
 (
-    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    party_uuid UUID    NOT NULL,
-    name       TEXT    NOT NULL,
-    server_id  INTEGER NOT NULL,
+    id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    party_uuid   UUID    NOT NULL,
+    name         TEXT    NOT NULL,
+    server_id    INTEGER NOT NULL,
+    is_disbanded BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
-
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_faction_per_name ON factions (name, server_id) WHERE is_disbanded = FALSE;
 CREATE TABLE IF NOT EXISTS faction_timestamps
 (
     faction_id INTEGER,
@@ -499,6 +527,36 @@ CREATE TABLE IF NOT EXISTS faction_timestamps
     FOREIGN KEY (faction_id) REFERENCES factions (id) ON DELETE CASCADE,
     PRIMARY KEY (faction_id, timestamp, reason)
 );
+CREATE OR REPLACE FUNCTION handle_faction_creation(
+    party_uuid UUID,
+    name TEXT,
+    server_id INTEGER,
+    chat_message TEXT,
+    user_uuid UUID
+)
+    RETURNS BOOLEAN
+AS
+$$
+DECLARE
+    faction_id INTEGER;
+BEGIN
+    INSERT INTO factions (party_uuid, name, server_id)
+    VALUES (handle_faction_creation.party_uuid, handle_faction_creation.name, handle_faction_creation.server_id)
+    RETURNING id INTO faction_id;
+
+    INSERT INTO faction_data (faction_id) VALUES (faction_id);
+
+    INSERT INTO faction_timestamps (faction_id, reason, user_uuid)
+    VALUES (faction_id, chat_message, handle_faction_creation.user_uuid);
+
+    INSERT INTO current_factions_members (user_uuid, faction_id, rank_id)
+    VALUES (handle_faction_creation.user_uuid, faction_id, 3); -- leader rank
+
+    RETURN TRUE;
+EXCEPTION
+    WHEN OTHERS THEN RETURN FALSE;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE TABLE IF NOT EXISTS current_factions_members
 (
@@ -507,6 +565,7 @@ CREATE TABLE IF NOT EXISTS current_factions_members
     rank_id    INTEGER NOT NULL,
     FOREIGN KEY (faction_id) REFERENCES factions (id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS one_leader_per_faction ON current_factions_members (faction_id) WHERE rank_id = 4; -- party_ranks -> leader
 
 CREATE TABLE IF NOT EXISTS faction_data
 (
