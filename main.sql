@@ -579,8 +579,7 @@ CREATE TABLE IF NOT EXISTS user_punishments
     timestamp          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     reason             TEXT        NOT NULL,
     expiration         TIMESTAMPTZ NOT NULL,
-    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
-    FOREIGN KEY (punishment_type_id) REFERENCES punishment_types (id)
+    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
 CREATE OR REPLACE FUNCTION get_farthest_user_punishment(punishment_type_name TEXT, user_uuid UUID, server_id INTEGER)
     RETURNS TABLE
