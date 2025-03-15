@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS kollusion_spawns
     y          INTEGER NOT NULL,
     z          INTEGER NOT NULL
 );
--- TODO
 
 DROP TABLE server_tips;
 CREATE TABLE server_tips

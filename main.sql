@@ -6,6 +6,25 @@ CREATE TABLE IF NOT EXISTS user_referrals
     referrer  TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE OR REPLACE FUNCTION get_user_referral_exists()
+    RETURNS BOOLEAN
+AS
+$$
+SELECT EXISTS(SELECT *
+              FROM user_referrals
+              WHERE user_uuid = ?)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION insert_user_referral(
+    user_uuid UUID,
+    referrer TEXT
+)
+    RETURNS BOOLEAN
+AS
+$$
+INSERT INTO user_referrals (user_uuid, referrer)
+VALUES (insert_user_referral.user_uuid, insert_user_referral.referrer)
+ON CONFLICT DO NOTHING
+$$ LANGUAGE sql;
 
 DROP TABLE chat_ranks;
 CREATE TABLE chat_ranks
@@ -498,17 +517,32 @@ CREATE TABLE IF NOT EXISTS user_consumable_kits_history
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (user_uuid, kit_id, timestamp)
 );
-CREATE OR REPLACE FUNCTION foo(
+CREATE OR REPLACE FUNCTION get_nullable_newest_server_consumable_kits_data_timestamp(
+    user_uuid UUID,
+    server_id INTEGER,
+    kit_name TEXT
 )
     RETURNS BOOLEAN
 AS
 $$
 SELECT id, bukkit_kit_contents, cooldown, timestamp
-FROM server_consumable_kits
-         LEFT JOIN user_consumable_kits_history
-                   ON server_consumable_kits.id = user_consumable_kits_history.kit_id AND user_uuid = ?
-WHERE server_id = ?
-  AND kit_name = ?
+FROM user_consumable_kits_history
+         JOIN server_consumable_kits
+              ON server_consumable_kits.id = user_consumable_kits_history.kit_id
+WHERE user_consumable_kits_history.user_uuid = get_nullable_newest_server_consumable_kits_data_timestamp.user_uuid
+  AND server_consumable_kits.server_id = get_nullable_newest_server_consumable_kits_data_timestamp.server_id
+  AND server_consumable_kits.kit_name = get_nullable_newest_server_consumable_kits_data_timestamp.kit_name
+ORDER BY timestamp DESC
+LIMIT 1
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE insert_user_consumable_kit_history_entry(
+    user_uuid UUID,
+    kit_id INTEGER
+)
+AS
+$$
+INSERT INTO user_consumable_kits_history (user_uuid, kit_id)
+VALUES (insert_user_consumable_kit_history_entry.user_uuid, insert_user_consumable_kit_history_entry.kit_id)
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS user_personal_kits
@@ -1283,6 +1317,62 @@ CREATE TABLE IF NOT EXISTS server_arenas
     FOREIGN KEY (server_id) REFERENCES servers (id),
     PRIMARY KEY (arena_id, server_id)
 );
+CREATE OR REPLACE FUNCTION get_arena_names(
+    server_id INTEGER
+)
+    RETURNS TEXT[]
+AS
+$$
+SELECT name
+FROM server_arenas
+         JOIN arena_data ON server_arenas.arena_id = arena_data.id
+WHERE server_arenas.server_id = get_arena_names.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION upsert_server_arena_return_id(
+    name TEXT,
+    creator TEXT,
+    server_id INTEGER
+)
+    RETURNS INTEGER
+AS
+$$
+WITH cte
+         AS (INSERT INTO arena_data (name, creator) VALUES (upsert_server_arena_return_id.name,
+                                                            upsert_server_arena_return_id.creator) ON CONFLICT (name) DO UPDATE SET creator = EXCLUDED.creator RETURNING id)
+INSERT
+INTO server_arenas (arena_id, server_id)
+VALUES (cte.id, upsert_server_arena_return_id.server_id)
+RETURNING id
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_server_arena_name_exists(
+    name TEXT,
+    server_id INTEGER
+)
+    RETURNS BOOLEAN
+AS
+$$
+SELECT EXISTS(SELECT *
+              FROM server_arenas
+                       JOIN arena_data ON server_arenas.arena_id = arena_data.id
+              WHERE arena_data.name = get_server_arena_name_exists.name
+                AND server_arenas.server_id = get_server_arena_name_exists.server_id)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION delete_server_arena_return_id(
+    name TEXT,
+    server_id INTEGER
+)
+    RETURNS INTEGER
+AS
+$$
+DELETE
+FROM server_arenas
+WHERE id = (SELECT server_arenas.id
+            FROM server_arenas
+                     JOIN arena_data ON server_arenas.arena_id = arena_data.id
+            WHERE arena_data.name = delete_server_arena_return_id.name
+              AND server_arenas.server_id = delete_server_arena_return_id.server_id)
+RETURNING id
+$$ LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS server_koths
 (
     id        INTEGER DEFAULT nextval('server_arenas_sequence') UNIQUE NOT NULL,
@@ -1296,6 +1386,23 @@ CREATE TABLE IF NOT EXISTS server_koths
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (arena_id, server_id)
 );
+CREATE OR REPLACE FUNCTION get_arena_data(
+    arena_id INTEGER
+)
+    RETURNS TABLE
+            (
+                name    TEXT,
+                creator TEXT
+            )
+AS
+$$
+SELECT name, creator
+FROM arena_data
+         LEFT JOIN server_koths ON arena_data.id = server_koths.arena_id
+         LEFT JOIN server_arenas ON arena_data.id = server_arenas.arena_id
+WHERE server_arenas.id = get_arena_data.arena_id
+   OR server_koths.id = get_arena_data.arena_id
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS koths
 (
