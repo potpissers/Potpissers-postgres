@@ -7,18 +7,16 @@ CREATE TABLE IF NOT EXISTS user_referrals
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE OR REPLACE FUNCTION get_user_referral_exists()
-    RETURNS BOOLEAN
-AS
+    RETURNS BOOLEAN AS
 $$
 SELECT EXISTS(SELECT *
               FROM user_referrals
               WHERE user_uuid = ?)
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION insert_user_referral(
+CREATE OR REPLACE PROCEDURE insert_user_referral(
     user_uuid UUID,
     referrer TEXT
 )
-    RETURNS BOOLEAN
 AS
 $$
 INSERT INTO user_referrals (user_uuid, referrer)
@@ -82,12 +80,8 @@ CREATE TABLE IF NOT EXISTS successful_transactions
     timestamp             TIMESTAMPTZ DEFAULT NOW(),
     referrer              TEXT
 );
-CREATE OR REPLACE FUNCTION get_donation_rank(
-    user_uuid UUID,
-    game_mode_name TEXT
-)
-    RETURNS TEXT
-AS
+CREATE OR REPLACE FUNCTION get_donation_rank(user_uuid UUID, game_mode_name TEXT)
+    RETURNS TEXT AS
 $$
 WITH cte AS (SELECT COALESCE(SUM(value_in_cents), 0) AS total_value_in_cents
              FROM successful_transactions
@@ -172,9 +166,7 @@ CREATE TABLE IF NOT EXISTS server_data
     rogue_radius                      INTEGER DEFAULT 5,
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
-CREATE OR REPLACE FUNCTION upsert_server_return_data(
-    server_name TEXT
-)
+CREATE OR REPLACE FUNCTION upsert_server_return_data(server_name TEXT)
     RETURNS TABLE -- TODO record (?)
             (
                 server_id                         INTEGER,
@@ -311,9 +303,7 @@ CREATE TABLE IF NOT EXISTS server_loot_chests
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (server_id, world_name, x, y, z)
 );
-CREATE OR REPLACE FUNCTION get_server_loot_chests(
-    server_id INTEGER
-)
+CREATE OR REPLACE FUNCTION get_server_loot_chests(server_id INTEGER)
     RETURNS TABLE
             (
                 world_name      TEXT,
@@ -409,12 +399,8 @@ CREATE TABLE IF NOT EXISTS ip_exempt_uuids
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (user_uuid, server_id)
 );
-CREATE OR REPLACE FUNCTION get_is_user_ip_exempt(
-    user_uuid UUID,
-    server_id INTEGER
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION get_is_user_ip_exempt(user_uuid UUID, server_id INTEGER)
+    RETURNS BOOLEAN AS
 $$
 SELECT EXISTS(SELECT 1
               FROM ip_exempt_uuids
@@ -422,22 +408,18 @@ SELECT EXISTS(SELECT 1
                 AND ip_exempt_uuids.server_id = get_is_user_ip_exempt.server_id)
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION toggle_is_user_ip_exempt_return_result(
-    user_uuid UUID,
-    server_id INTEGER
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION toggle_is_user_ip_exempt_return_result(user_uuid UUID, server_id INTEGER)
+    RETURNS BOOLEAN AS
 $$
-WITH insert
+WITH cte
          AS (INSERT INTO ip_exempt_uuids (user_uuid, server_id) VALUES (toggle_is_user_ip_exempt_return_result.user_uuid,
                                                                         toggle_is_user_ip_exempt_return_result.server_id) ON CONFLICT DO UPDATE SET user_uuid = EXCLUDED.user_uuid RETURNING XMAX <> 0 AS exists)
 DELETE
 FROM ip_exempt_uuids
 WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
   AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id
-  AND EXISTS (SELECT exists FROM insert WHERE exists = TRUE)
-RETURNING (SELECT exists FROM insert)
+  AND EXISTS (SELECT exists FROM cte WHERE exists = TRUE)
+RETURNING cte.exists
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS kits
@@ -464,11 +446,8 @@ VALUES (upsert_default_kit.kit_name, upsert_default_kit.bukkit_default_loadout)
 ON CONFLICT (kit_name) DO UPDATE SET bukkit_default_loadout = EXCLUDED.bukkit_default_loadout
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_kit_bukkit_default_contents(
-    kit_name TEXT
-)
-    RETURNS BYTEA
-AS
+CREATE OR REPLACE FUNCTION get_kit_bukkit_default_contents(kit_name TEXT)
+    RETURNS BYTEA AS
 $$
 SELECT bukkit_default_loadout
 FROM kits
@@ -485,15 +464,12 @@ CREATE TABLE IF NOT EXISTS server_consumable_kits
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (server_id, kit_name)
 );
-CREATE OR REPLACE FUNCTION get_server_consumable_kit_names(
-    server_id INTEGER
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION get_server_consumable_kit_names(server_id INTEGER)
+    RETURNS TEXT[] AS
 $$
-SELECT kit_name
-FROM server_consumable_kits
-WHERE server_consumable_kits.server_id = get_server_consumable_kit_names.server_id
+SELECT ARRAY(SELECT kit_name
+             FROM server_consumable_kits
+             WHERE server_consumable_kits.server_id = get_server_consumable_kit_names.server_id)
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE upsert_server_consumable_kit(
     server_id INTEGER,
@@ -517,12 +493,14 @@ CREATE TABLE IF NOT EXISTS user_consumable_kits_history
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (user_uuid, kit_id, timestamp)
 );
-CREATE OR REPLACE FUNCTION get_nullable_newest_server_consumable_kits_data_timestamp(
-    user_uuid UUID,
-    server_id INTEGER,
-    kit_name TEXT
-)
-    RETURNS BOOLEAN
+CREATE OR REPLACE FUNCTION get_nullable_newest_server_consumable_kits_data_timestamp(user_uuid UUID, server_id INTEGER, kit_name TEXT)
+    RETURNS TABLE
+            (
+                id                  INTEGER,
+                bukkit_kit_contents BYTEA,
+                cooldown            INTEGER,
+                timestamp           TIMESTAMPTZ
+            )
 AS
 $$
 SELECT id, bukkit_kit_contents, cooldown, timestamp
@@ -563,12 +541,8 @@ CREATE TABLE IF NOT EXISTS user_staff_ranks
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (user_uuid, server_id)
 );
-CREATE OR REPLACE FUNCTION get_user_staff_rank_name(
-    user_uuid UUID,
-    server_id INTEGER
-)
-    RETURNS TEXT
-AS
+CREATE OR REPLACE FUNCTION get_user_staff_rank_name(user_uuid UUID, server_id INTEGER)
+    RETURNS TEXT AS
 $$
 SELECT name
 FROM user_staff_ranks
@@ -611,11 +585,7 @@ CREATE TABLE IF NOT EXISTS user_punishments
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     FOREIGN KEY (punishment_type_id) REFERENCES punishment_types (id)
 );
-CREATE OR REPLACE FUNCTION get_farthest_user_punishment(
-    punishment_type_name TEXT,
-    user_uuid UUID,
-    server_id INTEGER
-)
+CREATE OR REPLACE FUNCTION get_farthest_user_punishment(punishment_type_name TEXT, user_uuid UUID, server_id INTEGER)
     RETURNS TABLE
             (
                 expiration TIMESTAMPTZ,
@@ -659,12 +629,7 @@ INSERT
 INTO user_current_punishments (punishment_id, ip)
 VALUES (cte.id, insert_user_punishment.ip)
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_farthest_user_ip_punishment(
-    user_uuid UUID,
-    ip TEXT,
-    server_id INTEGER,
-    punishment_type_name TEXT
-)
+CREATE OR REPLACE FUNCTION get_farthest_user_ip_punishment(user_uuid UUID, ip TEXT, server_id INTEGER, punishment_type_name TEXT)
     RETURNS TABLE
             (
                 expiration TIMESTAMPTZ,
@@ -708,12 +673,8 @@ FROM party_invites
 WHERE party_invites.user_uuid = delete_party_invite.user_uuid
   AND party_invites.party_uuid = delete_party_invite.party_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_user_party_invite_rank_name(
-    user_uuid UUID,
-    party_uuid UUID
-)
-    RETURNS TEXT
-AS
+CREATE OR REPLACE FUNCTION get_user_party_invite_rank_name(user_uuid UUID, party_uuid UUID)
+    RETURNS TEXT AS
 $$
 SELECT name
 FROM party_invites
@@ -721,13 +682,7 @@ FROM party_invites
 WHERE party_invites.user_uuid = get_user_party_invite_rank_name.user_uuid
   AND party_invites.party_uuid = get_user_party_invite_rank_name.party_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION upsert_party_invite(
-    user_uuid UUID,
-    party_uuid UUID,
-    inviter_uuid UUID,
-    rank_name TEXT
-)
-    RETURNS BOOLEAN
+CREATE OR REPLACE PROCEDURE upsert_party_invite(user_uuid UUID, party_uuid UUID, inviter_uuid UUID, rank_name TEXT)
 AS
 $$
 INSERT
@@ -748,25 +703,17 @@ CREATE TABLE IF NOT EXISTS ally_invites
     timestamp          TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (inviter_party_uuid, invited_party_uuid)
 );
-CREATE OR REPLACE FUNCTION get_is_ally_invited(
-    inviter_party_uuid UUID,
-    invited_party_uuid UUID
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION get_is_ally_invited(inviter_party_uuid UUID, invited_party_uuid UUID)
+    RETURNS BOOLEAN AS
 $$
 SELECT EXISTS(SELECT *
               FROM ally_invites
               WHERE ally_invites.inviter_party_uuid = get_is_ally_invited.inviter_party_uuid
                 AND ally_invites.invited_party_uuid = get_is_ally_invited.invited_party_uuid)
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION upsert_ally_invite_return_existed(
-    inviter_party_uuid UUID,
-    invited_party_uuid UUID,
-    inviter_user_uuid UUID
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION upsert_ally_invite_return_existed(inviter_party_uuid UUID, invited_party_uuid UUID,
+                                                             inviter_user_uuid UUID)
+    RETURNS BOOLEAN AS
 $$
 INSERT INTO ally_invites (inviter_party_uuid, invited_party_uuid, inviter_user_uuid)
 VALUES (upsert_ally_invite_return_existed.inviter_party_uuid, upsert_ally_invite_return_existed.invited_party_uuid,
@@ -791,12 +738,8 @@ FROM current_parties_relations
 WHERE current_parties_relations.party_uuid = delete_party_relation.party_uuid
   AND current_parties_relations.party_arg_uuid = delete_party_relation.party_arg_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_party_relation_is_ally_else_enemy(
-    party_uuid UUID,
-    party_arg_uuid UUID
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION get_party_relation_is_ally_else_enemy(party_uuid UUID, party_arg_uuid UUID)
+    RETURNS BOOLEAN AS
 $$
 SELECT is_ally_else_enemy
 FROM current_parties_relations
@@ -814,9 +757,7 @@ INSERT INTO current_parties_relations (party_uuid, party_arg_uuid, is_ally_else_
 VALUES (insert_party_relation.party_uuid, insert_party_relation.party_arg_uuid,
         insert_party_relation.is_ally_else_enemy)
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_party_relations(
-    party_uuid UUID
-)
+CREATE OR REPLACE FUNCTION get_party_relations(party_uuid UUID)
     RETURNS TABLE
             (
                 party_arg_uuid     UUID,
@@ -837,9 +778,7 @@ CREATE TABLE IF NOT EXISTS current_parties_members
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_leader_per_party ON current_parties_members (party_uuid) WHERE rank_id = 4;
 -- party_ranks -> leader
-CREATE OR REPLACE FUNCTION get_party_leader_uuid(
-    party_uuid UUID
-)
+CREATE OR REPLACE FUNCTION get_party_leader_uuid(party_uuid UUID)
     RETURNS UUID
 AS
 $$
@@ -856,23 +795,16 @@ DELETE
 FROM current_parties_members
 WHERE current_parties_members.party_uuid = handle_network_party_delete.party_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_user_network_party_rank_name(
-    user_uuid UUID
-)
-    RETURNS TEXT
-AS
+CREATE OR REPLACE FUNCTION get_user_network_party_rank_name(user_uuid UUID)
+    RETURNS TEXT AS
 $$
 SELECT name
 FROM current_parties_members
          JOIN party_ranks ON current_parties_members.rank_id = party_ranks.id
 WHERE current_parties_members.user_uuid = get_user_network_party_rank_name.user_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_user_is_in_party(
-    user_uuid UUID,
-    party_uuid UUID
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION get_user_is_in_party(user_uuid UUID, party_uuid UUID)
+    RETURNS BOOLEAN AS
 $$
 SELECT EXISTS(SELECT *
               FROM current_parties_members
@@ -890,11 +822,8 @@ FROM current_parties_members
 WHERE current_parties_members.user_uuid = delete_user_party.user_uuid
   AND current_parties_members.party_uuid = delete_user_party.party_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_user_party_uuid(
-    user_uuid UUID
-)
-    RETURNS UUID
-AS
+CREATE OR REPLACE FUNCTION get_user_party_uuid(user_uuid UUID)
+    RETURNS UUID AS
 $$
 SELECT party_uuid
 FROM current_parties_members
@@ -911,12 +840,7 @@ INSERT INTO current_parties_members (user_uuid, party_uuid, rank_id)
 VALUES (insert_current_parties_members_user.user_uuid, insert_current_parties_members_user.party_uuid,
         (SELECT id FROM party_ranks WHERE name = party_rank_name))
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_insert_party_member(
-    user_uuid UUID,
-    party_uuid UUID,
-    rank_name TEXT
-)
-    RETURNS BOOLEAN
+CREATE OR REPLACE PROCEDURE handle_insert_party_member(user_uuid UUID, party_uuid UUID, rank_name TEXT)
 AS
 $$
 WITH _ AS (DELETE FROM party_invites WHERE party_invites.user_uuid = handle_insert_party_member.user_uuid AND
@@ -930,11 +854,7 @@ ON CONFLICT (user_uuid) DO UPDATE SET rank_id = CASE
                                                         THEN EXCLUDED.rank_id
                                                     ELSE current_parties_members.rank_id END
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_update_party_leader(
-    party_uuid UUID,
-    user_uuid UUID
-)
-    RETURNS BOOLEAN
+CREATE OR REPLACE PROCEDURE handle_update_party_leader(party_uuid UUID, user_uuid UUID)
 AS
 $$
 WITH _
@@ -966,15 +886,9 @@ CREATE TABLE IF NOT EXISTS faction_timestamps
     FOREIGN KEY (faction_id) REFERENCES factions (id) ON DELETE CASCADE,
     PRIMARY KEY (faction_id, timestamp, reason)
 );
-CREATE OR REPLACE FUNCTION handle_faction_creation(
-    party_uuid UUID,
-    name TEXT,
-    server_id INTEGER,
-    chat_message TEXT,
-    user_uuid UUID
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION handle_faction_creation(party_uuid UUID, name TEXT, server_id INTEGER, chat_message TEXT,
+                                                   user_uuid UUID)
+    RETURNS BOOLEAN AS
 $$
 DECLARE
     faction_id INTEGER;
@@ -1045,12 +959,8 @@ CREATE TABLE IF NOT EXISTS user_fights
     fight_id  INTEGER NOT NULL,
     FOREIGN KEY (fight_id) REFERENCES fights (id) ON DELETE CASCADE
 );
-CREATE OR REPLACE FUNCTION insert_user_fight_return_id(
-    user_uuid UUID,
-    server_id INTEGER
-)
-    RETURNS INTEGER
-AS
+CREATE OR REPLACE FUNCTION insert_user_fight_return_id(user_uuid UUID, server_id INTEGER)
+    RETURNS INTEGER AS
 $$
 WITH cte AS (
     INSERT INTO fights (fight_uuid, server_id)
@@ -1114,8 +1024,7 @@ CREATE OR REPLACE FUNCTION insert_user_death_return_id(
     killer_uuid UUID, bukkit_kill_weapon BYTEA,
     bukkit_killer_inventory BYTEA
 )
-    RETURNS INTEGER
-AS
+    RETURNS INTEGER AS
 $$
 INSERT INTO user_deaths (server_id, victim_user_fight_id, victim_uuid,
                          bukkit_victim_inventory,
@@ -1130,13 +1039,8 @@ VALUES (insert_user_death_return_id.server_id, insert_user_death_return_id.victi
         insert_user_death_return_id.bukkit_kill_weapon, insert_user_death_return_id.bukkit_killer_inventory)
 RETURNING id
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_user_kill_streak(
-    victim_uuid UUID,
-    server_id INTEGER,
-    killer_uuid UUID
-)
-    RETURNS INTEGER
-AS
+CREATE OR REPLACE FUNCTION get_user_kill_streak(victim_uuid UUID, server_id INTEGER, killer_uuid UUID)
+    RETURNS INTEGER AS
 $$
 WITH latest_death
          AS (SELECT COALESCE(MAX(timestamp), '-infinity'::timestamptz) AS timestamp
@@ -1184,10 +1088,7 @@ CREATE TABLE IF NOT EXISTS deathbans
     expiration TIMESTAMPTZ NOT NULL,
     FOREIGN KEY (death_id) REFERENCES user_deaths (id) ON DELETE CASCADE
 );
-CREATE OR REPLACE FUNCTION get_farthest_user_death_ban(
-    victim_uuid UUID,
-    server_id INTEGER
-)
+CREATE OR REPLACE FUNCTION get_farthest_user_death_ban(victim_uuid UUID, server_id INTEGER)
     RETURNS TABLE
             (
                 expiration    TIMESTAMPTZ,
@@ -1221,11 +1122,7 @@ INTO current_deathbans (deathban_id, ip)
 VALUES (cte.id, insert_deathban.ip);
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_farthest_user_ip_deathban(
-    user_uuid UUID,
-    ip TEXT,
-    server_id INTEGER
-)
+CREATE OR REPLACE FUNCTION get_farthest_user_ip_deathban(user_uuid UUID, ip TEXT, server_id INTEGER)
     RETURNS TABLE
             (
                 expiration    TIMESTAMPTZ,
@@ -1317,22 +1214,15 @@ CREATE TABLE IF NOT EXISTS server_arenas
     FOREIGN KEY (server_id) REFERENCES servers (id),
     PRIMARY KEY (arena_id, server_id)
 );
-CREATE OR REPLACE FUNCTION get_arena_names(
-    server_id INTEGER
-)
-    RETURNS TEXT[]
-AS
+CREATE OR REPLACE FUNCTION get_arena_names(server_id INTEGER)
+    RETURNS TEXT[] AS
 $$
-SELECT name
-FROM server_arenas
-         JOIN arena_data ON server_arenas.arena_id = arena_data.id
-WHERE server_arenas.server_id = get_arena_names.server_id
+SELECT ARRAY(SELECT name
+             FROM server_arenas
+                      JOIN arena_data ON server_arenas.arena_id = arena_data.id
+             WHERE server_arenas.server_id = get_arena_names.server_id)
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION upsert_server_arena_return_id(
-    name TEXT,
-    creator TEXT,
-    server_id INTEGER
-)
+CREATE OR REPLACE FUNCTION upsert_server_arena_return_id(name TEXT, creator TEXT, server_id INTEGER)
     RETURNS INTEGER
 AS
 $$
@@ -1344,12 +1234,8 @@ INTO server_arenas (arena_id, server_id)
 VALUES (cte.id, upsert_server_arena_return_id.server_id)
 RETURNING id
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_server_arena_name_exists(
-    name TEXT,
-    server_id INTEGER
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION get_server_arena_name_exists(name TEXT, server_id INTEGER)
+    RETURNS BOOLEAN AS
 $$
 SELECT EXISTS(SELECT *
               FROM server_arenas
@@ -1357,12 +1243,8 @@ SELECT EXISTS(SELECT *
               WHERE arena_data.name = get_server_arena_name_exists.name
                 AND server_arenas.server_id = get_server_arena_name_exists.server_id)
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION delete_server_arena_return_id(
-    name TEXT,
-    server_id INTEGER
-)
-    RETURNS INTEGER
-AS
+CREATE OR REPLACE FUNCTION delete_server_arena_return_id(name TEXT, server_id INTEGER)
+    RETURNS INTEGER AS
 $$
 DELETE
 FROM server_arenas
@@ -1386,9 +1268,7 @@ CREATE TABLE IF NOT EXISTS server_koths
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (arena_id, server_id)
 );
-CREATE OR REPLACE FUNCTION get_arena_data(
-    arena_id INTEGER
-)
+CREATE OR REPLACE FUNCTION get_arena_data(arena_id INTEGER)
     RETURNS TABLE
             (
                 name    TEXT,
