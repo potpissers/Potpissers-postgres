@@ -435,10 +435,7 @@ SELECT ARRAY(
                SELECT kit_name
                FROM kits);
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE upsert_default_kit(
-    kit_name TEXT,
-    bukkit_default_loadout BYTEA
-)
+CREATE OR REPLACE PROCEDURE upsert_default_kit(kit_name TEXT, bukkit_default_loadout BYTEA)
 AS
 $$
 INSERT INTO kits (kit_name, bukkit_default_loadout)
@@ -499,7 +496,7 @@ CREATE OR REPLACE FUNCTION get_nullable_newest_server_consumable_kits_data_times
                 id                  INTEGER,
                 bukkit_kit_contents BYTEA,
                 cooldown            INTEGER,
-                timestamp           TIMESTAMPTZ
+                "timestamp"         TIMESTAMPTZ
             )
 AS
 $$
