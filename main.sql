@@ -1113,7 +1113,7 @@ CREATE TABLE IF NOT EXISTS current_deathbans
 );
 CREATE OR REPLACE PROCEDURE insert_deathban(
     death_id INTEGER,
-    expiration TEXT,
+    expiration TIMESTAMPTZ,
     ip TEXT
 )
 AS
