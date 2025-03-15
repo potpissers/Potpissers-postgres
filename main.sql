@@ -365,14 +365,14 @@ CREATE OR REPLACE PROCEDURE upsert_loot_table_chest(
 )
 AS
 $$
-WITH loot_table
+WITH cte
          AS (INSERT INTO loot_tables (server_id, loot_table_name) VALUES (upsert_loot_table_chest.server_id,
                                                                           upsert_loot_table_chest.loot_table_name) ON CONFLICT (server_id, loot_table_name) DO UPDATE SET loot_table_name = EXCLUDED.loot_table_name RETURNING id)
 INSERT
 INTO server_loot_chests (server_id, world_name, x, y, z, loot_table_id, min_amount, loot_variance, restock_time,
                          direction, block_type)
 VALUES (upsert_loot_table_chest.server_id, upsert_loot_table_chest.world_name, upsert_loot_table_chest.x,
-        upsert_loot_table_chest.y, upsert_loot_table_chest.z, loot_table.id, upsert_loot_table_chest.min_amount,
+        upsert_loot_table_chest.y, upsert_loot_table_chest.z, (SELECT id FROM cte), upsert_loot_table_chest.min_amount,
         upsert_loot_table_chest.loot_variance,
         upsert_loot_table_chest.restock_time, upsert_loot_table_chest.direction, upsert_loot_table_chest.block_type)
 ON CONFLICT (server_id, world_name, x, y, z) DO UPDATE SET loot_table_id = EXCLUDED.loot_table_id,
@@ -413,7 +413,7 @@ CREATE OR REPLACE FUNCTION toggle_is_user_ip_exempt_return_result(user_uuid UUID
 $$
 WITH cte
          AS (INSERT INTO ip_exempt_uuids (user_uuid, server_id) VALUES (toggle_is_user_ip_exempt_return_result.user_uuid,
-                                                                        toggle_is_user_ip_exempt_return_result.server_id) ON CONFLICT DO UPDATE SET user_uuid = EXCLUDED.user_uuid RETURNING XMAX <> 0 AS exists)
+                                                                        toggle_is_user_ip_exempt_return_result.server_id) ON CONFLICT (user_uuid, server_id) DO UPDATE SET user_uuid = EXCLUDED.user_uuid RETURNING XMAX <> 0 AS exists)
 DELETE
 FROM ip_exempt_uuids
 WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
@@ -448,7 +448,7 @@ CREATE OR REPLACE FUNCTION get_kit_bukkit_default_contents(kit_name TEXT)
 $$
 SELECT bukkit_default_loadout
 FROM kits
-WHERE bukkit_default_loadout.kit_name = get_kit_bukkit_default_contents.kit_name
+WHERE kits.kit_name = get_kit_bukkit_default_contents.kit_name
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS server_consumable_kits
