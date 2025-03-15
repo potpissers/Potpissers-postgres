@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION get_user_referral_exists(user_uuid UUID)
 $$
 SELECT EXISTS(SELECT *
               FROM user_referrals
-              WHERE user_uuid = get_user_referral_exists.user_uuid)
+              WHERE get_user_referral_exists.user_uuid = get_user_referral_exists.user_uuid)
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE insert_user_referral(
     user_uuid UUID,
@@ -1035,17 +1035,17 @@ VALUES (insert_user_death_return_id.server_id, insert_user_death_return_id.victi
         insert_user_death_return_id.bukkit_kill_weapon, insert_user_death_return_id.bukkit_killer_inventory)
 RETURNING id
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_user_kill_streak(victim_uuid UUID, server_id INTEGER, killer_uuid UUID)
+CREATE OR REPLACE FUNCTION get_user_kill_streak(user_uuid UUID, server_id INTEGER)
     RETURNS INTEGER AS
 $$
 WITH latest_death
          AS (SELECT COALESCE(MAX(timestamp), '-infinity'::timestamptz) AS timestamp
              FROM user_deaths
-             WHERE user_deaths.victim_uuid = get_user_kill_streak.victim_uuid
+             WHERE user_deaths.victim_uuid = get_user_kill_streak.user_uuid
                AND user_deaths.server_id = get_user_kill_streak.server_id)
 SELECT COUNT(*) AS kill_streak
 FROM user_deaths
-WHERE user_deaths.killer_uuid = get_user_kill_streak.killer_uuid
+WHERE user_deaths.killer_uuid = get_user_kill_streak.user_uuid
   AND user_deaths.server_id = get_user_kill_streak.server_id
   AND timestamp > (SELECT timestamp FROM latest_death)
 $$ LANGUAGE sql;
