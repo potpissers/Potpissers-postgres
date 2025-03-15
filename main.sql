@@ -13,10 +13,7 @@ SELECT EXISTS(SELECT *
               FROM user_referrals
               WHERE get_user_referral_exists.user_uuid = get_user_referral_exists.user_uuid)
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE insert_user_referral(
-    user_uuid UUID,
-    referrer TEXT
-)
+CREATE OR REPLACE PROCEDURE insert_user_referral(user_uuid UUID, referrer TEXT)
 AS
 $$
 INSERT INTO user_referrals (user_uuid, referrer)
@@ -206,25 +203,19 @@ ON CONFLICT (server_id) DO UPDATE SET server_id = EXCLUDED.server_id
 RETURNING *,
         (SELECT name FROM attack_speeds WHERE id = attack_speed_id) AS attack_speed_name;
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE update_server_death_ban_data(
-    death_ban_minutes INTEGER,
-    server_id INTEGER
-)
+CREATE OR REPLACE PROCEDURE update_server_death_ban_data(death_ban_minutes INTEGER, server_id INTEGER)
 AS
 $$
 UPDATE server_data
 SET death_ban_minutes = update_server_death_ban_data.death_ban_minutes
 WHERE server_id = update_server_death_ban_data.server_id;
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE upsert_server_attack_speed(
-    attack_speed_name TEXT,
-    server_id INTEGER
-)
+CREATE OR REPLACE PROCEDURE update_server_attack_speed(attack_speed_name TEXT, server_id INTEGER)
 AS
 $$
 UPDATE server_data
 SET attack_speed_id = (SELECT id FROM attack_speeds WHERE name = attack_speed_name)
-WHERE server_id = upsert_server_attack_speed.server_id
+WHERE server_id = update_server_attack_speed.server_id
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS player_attack_speeds
@@ -273,11 +264,7 @@ CREATE TABLE IF NOT EXISTS loot_table_entries
     FOREIGN KEY (loot_table_id) REFERENCES loot_tables (id) ON DELETE CASCADE,
     PRIMARY KEY (loot_table_id, entry_name, entry_chance)
 );
-CREATE OR REPLACE PROCEDURE insert_loot_table_entry(
-    loot_table_id INTEGER,
-    entry_name TEXT,
-    entry_chance DOUBLE PRECISION
-)
+CREATE OR REPLACE PROCEDURE insert_loot_table_entry(loot_table_id INTEGER, entry_name TEXT, entry_chance DOUBLE PRECISION)
 AS
 $$
 INSERT
@@ -333,12 +320,7 @@ FROM server_loot_chests
          JOIN loot_tables ON server_loot_chests.loot_table_id = loot_tables.id
 WHERE server_loot_chests.server_id = get_server_loot_chests.server_id;
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE delete_server_loot_chest(
-    server_id INTEGER,
-    world_name TEXT,
-    x INTEGER,
-    y INTEGER,
-    z INTEGER
+CREATE OR REPLACE PROCEDURE delete_server_loot_chest(server_id INTEGER, world_name TEXT, x INTEGER, y INTEGER, z INTEGER
 )
 AS
 $$
@@ -399,13 +381,13 @@ CREATE TABLE IF NOT EXISTS ip_exempt_uuids
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (user_uuid, server_id)
 );
-CREATE OR REPLACE FUNCTION get_is_user_ip_exempt(user_uuid UUID, server_id INTEGER)
+CREATE OR REPLACE FUNCTION get_user_is_ip_exempt(user_uuid UUID, server_id INTEGER)
     RETURNS BOOLEAN AS
 $$
 SELECT EXISTS(SELECT 1
               FROM ip_exempt_uuids
-              WHERE ip_exempt_uuids.user_uuid = get_is_user_ip_exempt.user_uuid
-                AND ip_exempt_uuids.server_id = get_is_user_ip_exempt.server_id)
+              WHERE ip_exempt_uuids.user_uuid = get_user_is_ip_exempt.user_uuid
+                AND ip_exempt_uuids.server_id = get_user_is_ip_exempt.server_id)
 $$
     LANGUAGE sql;
 CREATE OR REPLACE FUNCTION toggle_is_user_ip_exempt_return_result(user_uuid UUID, server_id INTEGER)
@@ -468,12 +450,8 @@ SELECT ARRAY(SELECT kit_name
              FROM server_consumable_kits
              WHERE server_consumable_kits.server_id = get_server_consumable_kit_names.server_id)
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE upsert_server_consumable_kit(
-    server_id INTEGER,
-    kit_name TEXT,
-    bukkit_kit_contents BYTEA,
-    cooldown INTEGER
-)
+CREATE OR REPLACE PROCEDURE upsert_server_consumable_kit(server_id INTEGER, kit_name TEXT, bukkit_kit_contents BYTEA,
+                                                         cooldown INTEGER)
 AS
 $$
 INSERT INTO server_consumable_kits (server_id, kit_name, bukkit_kit_contents, cooldown)
@@ -510,10 +488,7 @@ WHERE user_consumable_kits_history.user_uuid = get_nullable_newest_server_consum
 ORDER BY timestamp DESC
 LIMIT 1
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE insert_user_consumable_kit_history_entry(
-    user_uuid UUID,
-    kit_id INTEGER
-)
+CREATE OR REPLACE PROCEDURE insert_user_consumable_kit_history_entry(user_uuid UUID, kit_id INTEGER)
 AS
 $$
 INSERT INTO user_consumable_kits_history (user_uuid, kit_id)
@@ -547,11 +522,7 @@ FROM user_staff_ranks
 WHERE user_staff_ranks.user_uuid = get_user_staff_rank_name.user_uuid
   AND user_staff_ranks.server_id = get_user_staff_rank_name.server_id
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE upsert_user_staff_rank(
-    user_uuid UUID,
-    server_id INTEGER,
-    staff_rank_name TEXT
-)
+CREATE OR REPLACE PROCEDURE upsert_user_staff_rank(user_uuid UUID, server_id INTEGER, staff_rank_name TEXT)
 AS
 $$
 INSERT
@@ -605,14 +576,8 @@ CREATE TABLE IF NOT EXISTS user_current_punishments
     ip            TEXT,
     FOREIGN KEY (punishment_id) REFERENCES user_punishments (id)
 );
-CREATE OR REPLACE PROCEDURE insert_user_punishment(
-    user_uuid UUID,
-    server_id INTEGER,
-    punishment_type_name TEXT,
-    reason TEXT,
-    expiration TIMESTAMPTZ,
-    ip TEXT
-)
+CREATE OR REPLACE PROCEDURE insert_user_punishment(user_uuid UUID, server_id INTEGER, punishment_type_name TEXT,
+                                                   reason TEXT, expiration TIMESTAMPTZ, ip TEXT)
 AS
 $$
 WITH cte AS
@@ -658,10 +623,7 @@ CREATE TABLE IF NOT EXISTS party_invites
     timestamp    TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (user_uuid, party_uuid)
 );
-CREATE OR REPLACE PROCEDURE delete_party_invite(
-    user_uuid UUID,
-    party_uuid UUID
-)
+CREATE OR REPLACE PROCEDURE delete_party_invite(user_uuid UUID, party_uuid UUID)
 AS
 $$
 DELETE
@@ -742,11 +704,7 @@ FROM current_parties_relations
 WHERE current_parties_relations.party_uuid = get_party_relation_is_ally_else_enemy.party_uuid
   AND current_parties_relations.party_arg_uuid = get_party_relation_is_ally_else_enemy.party_arg_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE insert_party_relation(
-    party_uuid UUID,
-    party_arg_uuid UUID,
-    is_ally_else_enemy BOOLEAN
-)
+CREATE OR REPLACE PROCEDURE insert_party_relation(party_uuid UUID, party_arg_uuid UUID, is_ally_else_enemy BOOLEAN)
 AS
 $$
 INSERT INTO current_parties_relations (party_uuid, party_arg_uuid, is_ally_else_enemy)
@@ -807,10 +765,7 @@ SELECT EXISTS(SELECT *
               WHERE current_parties_members.user_uuid = get_user_is_in_party.user_uuid
                 AND current_parties_members.party_uuid = get_user_is_in_party.party_uuid)
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE delete_user_party(
-    user_uuid UUID,
-    party_uuid UUID
-)
+CREATE OR REPLACE PROCEDURE delete_user_party(user_uuid UUID, party_uuid UUID)
 AS
 $$
 DELETE
@@ -825,11 +780,7 @@ SELECT party_uuid
 FROM current_parties_members
 WHERE current_parties_members.user_uuid = get_user_party_uuid.user_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE insert_current_parties_members_user(
-    user_uuid UUID,
-    party_uuid UUID,
-    party_rank_name TEXT
-)
+CREATE OR REPLACE PROCEDURE insert_current_parties_members_user(user_uuid UUID, party_uuid UUID, party_rank_name TEXT)
 AS
 $$
 INSERT INTO current_parties_members (user_uuid, party_uuid, rank_id)
@@ -1017,7 +968,8 @@ CREATE OR REPLACE FUNCTION insert_user_death_return_id(
     death_y INTEGER,
     death_z INTEGER,
     death_message TEXT,
-    killer_uuid UUID, bukkit_kill_weapon BYTEA,
+    killer_uuid UUID,
+    bukkit_kill_weapon BYTEA,
     bukkit_killer_inventory BYTEA
 )
     RETURNS INTEGER AS
@@ -1107,11 +1059,7 @@ CREATE TABLE IF NOT EXISTS current_deathbans
     ip          TEXT,
     FOREIGN KEY (deathban_id) REFERENCES deathbans (death_id) ON DELETE CASCADE
 );
-CREATE OR REPLACE PROCEDURE insert_deathban(
-    death_id INTEGER,
-    expiration TIMESTAMPTZ,
-    ip TEXT
-)
+CREATE OR REPLACE PROCEDURE insert_deathban(death_id INTEGER, expiration TIMESTAMPTZ, ip TEXT)
 AS
 $$
 WITH _ AS (INSERT INTO deathbans (death_id, expiration) VALUES (insert_deathban.death_id, insert_deathban.expiration))
@@ -1151,11 +1099,7 @@ CREATE TABLE IF NOT EXISTS revives
     reason    TEXT    NOT NULL,
     PRIMARY KEY (user_uuid, timestamp)
 );
-CREATE OR REPLACE PROCEDURE insert_revive(
-    user_uuid UUID,
-    server_id INTEGER,
-    reason TEXT
-)
+CREATE OR REPLACE PROCEDURE insert_revive(user_uuid UUID, server_id INTEGER, reason TEXT)
 AS
 $$
 INSERT INTO revives (user_uuid, server_id, reason)

@@ -34,10 +34,7 @@ VALUES (upsert_user_data.user_uuid)
 ON CONFLICT (user_uuid) DO NOTHING
 $$
     LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE update_user_chat_type(
-    chat_type_name TEXT,
-    user_uuid UUID
-)
+CREATE OR REPLACE PROCEDURE update_user_chat_type(chat_type_name TEXT, user_uuid UUID)
 AS
 $$
 UPDATE user_data
@@ -54,12 +51,12 @@ FROM chat_types
 WHERE user_data.user_uuid = get_user_chat_type.user_uuid
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_is_user_chat_mod(user_uuid UUID)
+CREATE OR REPLACE FUNCTION get_user_id_chat_mod(user_uuid UUID)
     RETURNS BOOLEAN AS
 $$
 SELECT is_chat_mod
 FROM user_data
-WHERE user_data.user_uuid = get_is_user_chat_mod.user_uuid
+WHERE user_data.user_uuid = get_user_id_chat_mod.user_uuid
 $$
     LANGUAGE sql;
 CREATE OR REPLACE FUNCTION toggle_is_user_chat_mod_return_result(user_uuid UUID)
