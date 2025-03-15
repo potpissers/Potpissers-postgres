@@ -6,12 +6,12 @@ CREATE TABLE IF NOT EXISTS user_referrals
     referrer  TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE OR REPLACE FUNCTION get_user_referral_exists()
+CREATE OR REPLACE FUNCTION get_user_referral_exists(user_uuid UUID)
     RETURNS BOOLEAN AS
 $$
 SELECT EXISTS(SELECT *
               FROM user_referrals
-              WHERE user_uuid = ?)
+              WHERE user_uuid = get_user_referral_exists.user_uuid)
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE insert_user_referral(
     user_uuid UUID,
@@ -1112,14 +1112,16 @@ CREATE TABLE IF NOT EXISTS current_deathbans
     FOREIGN KEY (deathban_id) REFERENCES deathbans (death_id) ON DELETE CASCADE
 );
 CREATE OR REPLACE PROCEDURE insert_deathban(
+    death_id INTEGER,
+    expiration TEXT,
     ip TEXT
 )
 AS
 $$
-WITH cte AS (INSERT INTO deathbans (death_id, expiration) VALUES (?, ?) RETURNING id)
+WITH _ AS (INSERT INTO deathbans (death_id, expiration) VALUES (insert_deathban.death_id, insert_deathban.expiration))
 INSERT
 INTO current_deathbans (deathban_id, ip)
-VALUES (cte.id, insert_deathban.ip);
+VALUES (insert_deathban.death_id, insert_deathban.ip);
 $$
     LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_farthest_user_ip_deathban(user_uuid UUID, ip TEXT, server_id INTEGER)
