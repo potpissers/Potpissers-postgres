@@ -94,7 +94,7 @@ SELECT COALESCE((SELECT name
                  FROM line_items
                           JOIN chat_ranks ON line_items.chat_rank_id = chat_ranks.id
                  WHERE user_uuid = get_donation_rank.user_uuid
-                   AND value_in_cents < cte.total_value_in_cents
+                   AND value_in_cents < (SELECT total_value_in_cents FROM cte)
                  ORDER BY value_in_cents DESC
                  LIMIT 1), 'default');
 $$
@@ -201,7 +201,7 @@ WITH cte AS (
         RETURNING id)
 INSERT
 INTO server_data (server_id)
-VALUES (cte.id)
+VALUES ((SELECT id FROM cte))
 ON CONFLICT (server_id) DO UPDATE SET server_id = EXCLUDED.server_id
 RETURNING *,
         (SELECT name FROM attack_speeds WHERE id = attack_speed_id) AS attack_speed_name;
@@ -419,7 +419,7 @@ FROM ip_exempt_uuids
 WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
   AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id
   AND EXISTS (SELECT exists FROM cte WHERE exists = TRUE)
-RETURNING cte.exists
+RETURNING (SELECT exists FROM cte)
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS kits
@@ -627,7 +627,7 @@ WITH cte AS
                                                                                                               insert_user_punishment.expiration) RETURNING id)
 INSERT
 INTO user_current_punishments (punishment_id, ip)
-VALUES (cte.id, insert_user_punishment.ip)
+VALUES ((SELECT id FROM cte), insert_user_punishment.ip)
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_farthest_user_ip_punishment(user_uuid UUID, ip TEXT, server_id INTEGER, punishment_type_name TEXT)
     RETURNS TABLE
@@ -970,7 +970,7 @@ WITH cte AS (
         RETURNING id)
 INSERT
 INTO user_fights (user_uuid, fight_id)
-VALUES (insert_user_fight_return_id.user_uuid, cte.id)
+VALUES (insert_user_fight_return_id.user_uuid, (SELECT id FROM cte))
 RETURNING id
 $$ LANGUAGE sql;
 
@@ -1233,7 +1233,7 @@ WITH cte
                                                             upsert_server_arena_return_id.creator) ON CONFLICT (name) DO UPDATE SET creator = EXCLUDED.creator RETURNING id)
 INSERT
 INTO server_arenas (arena_id, server_id)
-VALUES (cte.id, upsert_server_arena_return_id.server_id)
+VALUES ((SELECT id FROM cte), upsert_server_arena_return_id.server_id)
 RETURNING id
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_server_arena_name_exists(name TEXT, server_id INTEGER)
