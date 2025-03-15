@@ -45,11 +45,8 @@ SET chat_type_id = (SELECT id FROM chat_types WHERE name = chat_type_name)
 WHERE user_uuid = update_user_chat_type.user_uuid
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_user_chat_type(
-    user_uuid UUID
-)
-    RETURNS TEXT
-AS
+CREATE OR REPLACE FUNCTION get_user_chat_type(user_uuid UUID)
+    RETURNS TEXT AS
 $$
 SELECT name
 FROM chat_types
@@ -57,22 +54,16 @@ FROM chat_types
 WHERE user_data.user_uuid = get_user_chat_type.user_uuid
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_is_user_chat_mod(
-    user_uuid UUID
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION get_is_user_chat_mod(user_uuid UUID)
+    RETURNS BOOLEAN AS
 $$
 SELECT is_chat_mod
 FROM user_data
 WHERE user_data.user_uuid = get_is_user_chat_mod.user_uuid
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION toggle_is_user_chat_mod_return_result(
-    user_uuid UUID
-)
-    RETURNS BOOLEAN
-AS
+CREATE OR REPLACE FUNCTION toggle_is_user_chat_mod_return_result(user_uuid UUID)
+    RETURNS BOOLEAN AS
 $$
 UPDATE user_data
 SET is_chat_mod = NOT is_chat_mod
