@@ -219,6 +219,41 @@ UPDATE server_data
 SET attack_speed_id = (SELECT id FROM attack_speeds WHERE name = attack_speed_name)
 WHERE server_id = update_server_attack_speed.server_id
 $$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_server_sharpness_limit(sharpness_limit INTEGER, server_id INTEGER)
+AS
+$$
+UPDATE server_data
+SET sharpness_limit = update_server_sharpness_limit.sharpness_limit
+WHERE server_id = update_server_sharpness_limit.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_server_protection_limit(protection_limit INTEGER, server_id INTEGER)
+AS
+$$
+UPDATE server_data
+SET protection_limit = update_server_protection_limit.protection_limit
+WHERE server_id = update_server_protection_limit.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_server_power_limit(power_limit INTEGER, server_id INTEGER)
+AS
+$$
+UPDATE server_data
+SET power_limit = update_server_power_limit.power_limit
+WHERE server_id = update_server_power_limit.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_server_regen_limit(regen_limit INTEGER, server_id INTEGER)
+AS
+$$
+UPDATE server_data
+SET bard_regen_level = update_server_regen_limit.regen_limit
+WHERE server_id = update_server_regen_limit.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_server_strength_limit(strength_limit INTEGER, server_id INTEGER)
+AS
+$$
+UPDATE server_data
+SET bard_strength_level = update_server_strength_limit.strength_limit
+WHERE server_id = update_server_strength_limit.server_id
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS player_attack_speeds
 (
@@ -690,6 +725,20 @@ CREATE TABLE IF NOT EXISTS current_parties_relations
     is_ally_else_enemy BOOLEAN NOT NULL,
     PRIMARY KEY (party_uuid, party_arg_uuid)
 );
+CREATE OR REPLACE FUNCTION get_party_relations_names(party_uuid UUID)
+    RETURNS TABLE
+            (
+                party_arg_uuid     UUID,
+                is_ally_else_enemy BOOLEAN,
+                name               TEXT
+            )
+AS
+$$
+SELECT party_arg_uuid, is_ally_else_enemy, name
+FROM current_parties_relations
+         LEFT JOIN factions ON party_arg_uuid = factions.party_uuid
+WHERE current_parties_relations.party_uuid = get_party_relations_names.party_uuid
+$$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE delete_party_relation(party_uuid UUID, party_arg_uuid UUID)
 AS
 $$
@@ -828,6 +877,13 @@ CREATE TABLE IF NOT EXISTS factions
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_faction_per_name ON factions (name, server_id) WHERE is_disbanded = FALSE;
+CREATE OR REPLACE FUNCTION get_faction_name(party_uuid UUID)
+    RETURNS TEXT AS
+$$
+SELECT name
+FROM factions
+WHERE factions.party_uuid = get_faction_name.party_uuid
+$$ LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS faction_timestamps
 (
     faction_id INTEGER,
@@ -869,7 +925,22 @@ CREATE TABLE IF NOT EXISTS current_factions_members
     rank_id    INTEGER NOT NULL,
     FOREIGN KEY (faction_id) REFERENCES factions (id)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS one_leader_per_faction ON current_factions_members (faction_id) WHERE rank_id = 4; -- party_ranks -> leader
+CREATE UNIQUE INDEX IF NOT EXISTS one_leader_per_faction ON current_factions_members (faction_id) WHERE rank_id = 4;
+-- party_ranks -> leader
+CREATE OR REPLACE FUNCTION get_faction_members(party_uuid UUID)
+    RETURNS TABLE
+            (
+                user_uuid UUID,
+                name      TEXT
+            )
+AS
+$$
+SELECT user_uuid, party_ranks.name
+FROM current_factions_members
+         JOIN factions ON factions.id = current_factions_members.faction_id
+         JOIN party_ranks ON party_ranks.id = current_factions_members.rank_id
+WHERE factions.party_uuid = get_faction_members.party_uuid
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS faction_data
 (
@@ -885,6 +956,126 @@ CREATE TABLE IF NOT EXISTS faction_data
     home_yaw            REAL,
     FOREIGN KEY (faction_id) REFERENCES factions (id) ON DELETE CASCADE
 );
+CREATE OR REPLACE FUNCTION get_faction_data(party_uuid UUID)
+    RETURNS TABLE
+            (
+                balance         INTEGER,
+                home_world_name TEXT,
+                home_x          INTEGER,
+                home_y          INTEGER,
+                home_z          INTEGER
+            )
+AS
+$$
+SELECT balance, home_world_name, home_x, home_y, home_z
+FROM faction_data
+         JOIN factions ON factions.id = faction_data.faction_id
+WHERE factions.party_uuid = get_faction_data.party_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION handle_dtr_death(server_id INTEGER, party_uuid UUID, frozen_until TIMESTAMPTZ)
+    RETURNS REAL
+AS
+$$
+WITH cte AS (WITH cte AS (SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM (NOW() - faction_data.frozen_until)) /
+                                                (SELECT dtr_max_time
+                                                 FROM server_data
+                                                 WHERE server_data.server_id = handle_dtr_death.server_id),
+                                                1.0),
+                                          0.0)                                                                              AS regen_percentage,
+                                 LEAST(COUNT(user_uuid) + 0.01, (SELECT dtr_max
+                                                                 FROM server_data
+                                                                 WHERE server_data.server_id = handle_dtr_death.server_id)) AS current_max_dtr,
+                                 current_minimum_dtr,
+                                 faction_data.faction_id
+                          FROM faction_data
+                                   JOIN faction_current_dtr_regen_players
+                                        ON faction_data.faction_id = faction_current_dtr_regen_players.faction_id
+                                   JOIN factions ON factions.id = faction_data.faction_id
+                          WHERE factions.party_uuid = handle_dtr_death.party_uuid
+                          GROUP BY faction_data.frozen_until, current_minimum_dtr, faction_data.faction_id)
+             SELECT faction_id,
+                    current_max_dtr,
+                    current_minimum_dtr +
+                    ((current_max_dtr - current_minimum_dtr) * regen_percentage) AS current_regen_adjusted_dtr -- minimum + (amount to be regen'd * regen percentage)
+             FROM cte),
+     dtr_freeze AS (
+         INSERT
+             INTO faction_data (faction_id, current_minimum_dtr, frozen_until)
+                 VALUES ((SELECT faction_id FROM cte),
+                         GREATEST((SELECT current_regen_adjusted_dtr FROM cte) - 1,
+                                  LEAST(-(SELECT current_max_dtr FROM cte),
+                                        (SELECT current_regen_adjusted_dtr FROM cte))), handle_dtr_death.frozen_until)
+                 ON CONFLICT (faction_id) DO UPDATE SET current_minimum_dtr = EXCLUDED.current_minimum_dtr,
+                     frozen_until = EXCLUDED.frozen_until
+                 RETURNING faction_id, current_minimum_dtr)
+DELETE
+FROM faction_current_dtr_regen_players
+WHERE faction_id = (SELECT faction_id FROM dtr_freeze)
+RETURNING (SELECT current_minimum_dtr FROM dtr_freeze)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_dtr_data(server_id INTEGER, party_uuid UUID)
+    RETURNS TABLE
+            (
+                frozen_until               TIMESTAMPTZ,
+                current_max_dtr            REAL,
+                current_regen_adjusted_dtr REAL
+            )
+AS
+$$
+WITH cte AS (SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM (NOW() - frozen_until)) /
+                                   (SELECT dtr_max_time
+                                    FROM server_data
+                                    WHERE server_data.server_id = get_dtr_data.server_id),
+                                   1.0),
+                             0.0)                                                                          AS regen_percentage,
+                    LEAST(COUNT(user_uuid) + 0.01, (SELECT dtr_max
+                                                    FROM server_data
+                                                    WHERE server_data.server_id = get_dtr_data.server_id)) AS current_max_dtr,
+                    current_minimum_dtr,
+                    frozen_until
+             FROM faction_data
+                      LEFT JOIN faction_current_dtr_regen_players
+                                ON faction_data.faction_id = faction_current_dtr_regen_players.faction_id
+                      JOIN factions ON factions.id = faction_data.faction_id
+             WHERE factions.party_uuid = get_dtr_data.party_uuid
+             GROUP BY frozen_until, current_minimum_dtr)
+SELECT frozen_until,
+       current_max_dtr,
+       current_minimum_dtr +
+       ((current_max_dtr - current_minimum_dtr) * regen_percentage) AS current_regen_adjusted_dtr -- minimum + (amount to be regen'd * regen percentage)
+FROM cte
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_f_list_data(server_id INTEGER, party_uuids UUID[])
+    RETURNS TABLE
+            (
+                name                       TEXT,
+                party_uuid                 UUID,
+                current_regen_adjusted_dtr REAL
+            )
+AS
+$$
+WITH cte AS (SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM (NOW() - frozen_until)) /
+                                   (SELECT dtr_max_time FROM server_data WHERE server_data.server_id = get_f_list_data.server_id),
+                                   1.0),
+                             0.0)                                                                 AS regen_percentage,
+                    LEAST(COUNT(user_uuid) + 0.01, (SELECT dtr_max
+                                                    FROM server_data
+                                                    WHERE server_data.server_id = get_f_list_data.server_id)) AS current_max_dtr,
+                    current_minimum_dtr,
+                    name,
+                    party_uuid
+             FROM faction_data
+                      JOIN faction_current_dtr_regen_players
+                           ON faction_data.faction_id = faction_current_dtr_regen_players.faction_id
+                      JOIN factions ON factions.id = faction_data.faction_id
+             WHERE party_uuid = ANY (get_f_list_data.party_uuids)
+             GROUP BY frozen_until, current_minimum_dtr, name, party_uuid)
+SELECT name,
+       party_uuid,
+       current_minimum_dtr +
+       ((current_max_dtr - current_minimum_dtr) * regen_percentage) AS current_regen_adjusted_dtr -- minimum + (amount to be regen'd * regen percentage)
+FROM cte
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS faction_current_dtr_regen_players
 (
@@ -893,6 +1084,14 @@ CREATE TABLE IF NOT EXISTS faction_current_dtr_regen_players
     FOREIGN KEY (faction_id) REFERENCES factions (id),
     PRIMARY KEY (faction_id, user_uuid)
 );
+CREATE OR REPLACE PROCEDURE insert_dtr_regen_player(user_uuid UUID, party_uuid UUID)
+AS
+$$
+INSERT INTO faction_current_dtr_regen_players (user_uuid, faction_id)
+VALUES (insert_dtr_regen_player.user_uuid,
+        (SELECT id FROM factions WHERE factions.party_uuid = insert_dtr_regen_player.party_uuid))
+ON CONFLICT (user_uuid, faction_id) DO NOTHING
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS fights
 (
@@ -1307,6 +1506,37 @@ CREATE TABLE IF NOT EXISTS user_diamond_ores_mined
     FOREIGN KEY (server_id) REFERENCES servers (id),
     PRIMARY KEY (user_uuid, server_id)
 );
+CREATE OR REPLACE FUNCTION get_user_diamond_ores_mined(user_uuid UUID, server_id INTEGER)
+    RETURNS INTEGER
+AS
+$$
+SELECT amount
+FROM user_diamond_ores_mined
+WHERE user_diamond_ores_mined.user_uuid = get_user_diamond_ores_mined.user_uuid
+  AND user_diamond_ores_mined.server_id = get_user_diamond_ores_mined.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION handle_diamond_ores_mined_upsert_return_results(user_uuid UUID, server_id INTEGER, amount INTEGER, party_uuid INTEGER)
+    RETURNS TABLE
+            (
+                user_diamonds_mined    INTEGER,
+                faction_diamonds_mined INTEGER
+            ) -- TODO record
+AS
+$$
+WITH cte
+         AS (INSERT INTO user_diamond_ores_mined (user_uuid, server_id, amount) VALUES (foo.user_uuid, foo.server_id, foo.amount) ON CONFLICT (user_uuid, server_id) DO UPDATE SET amount = amount + EXCLUDED.amount RETURNING amount AS user_diamonds_mined, server_id),
+     foo AS (
+         INSERT
+             INTO faction_diamond_ores_mined (faction_id, amount)
+                 SELECT id, foo.amount
+                 FROM factions
+                 WHERE factions.party_uuid = foo.party_uuid
+                   AND factions.server_id = foo.server_id
+                   AND foo.party_uuid IS NOT NULL
+                 ON CONFLICT (faction_id) DO UPDATE SET amount = amount + EXCLUDED.amount RETURNING amount AS faction_diamonds_mined)
+SELECT (SELECT user_diamonds_mined FROM cte)    AS user_diamonds_mined,
+       (SELECT faction_diamonds_mined FROM foo) AS faction_diamonds_mined
+$$ LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS user_netherite_mined
 (
     user_uuid UUID,
