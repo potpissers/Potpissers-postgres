@@ -66,8 +66,3 @@ WHERE user_uuid = toggle_is_user_chat_mod_return_result.user_uuid
 RETURNING is_chat_mod
 $$
     LANGUAGE sql;
-
-CREATE OR REPLACE PROCEDURE foo()
-AS
-$$
-$$ LANGUAGE sql;

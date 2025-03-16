@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS server_data
     death_ban_minutes                 INTEGER DEFAULT 0,
     world_border_radius               INTEGER DEFAULT 1250,
     default_kit_name                  TEXT    DEFAULT NULL,
+    default_koth_loot_factor          INTEGER DEFAULT 1,
     sharpness_limit                   INTEGER DEFAULT 0,
     power_limit                       INTEGER DEFAULT 0,
     protection_limit                  INTEGER DEFAULT 0,
@@ -927,6 +928,15 @@ EXCEPTION
     WHEN OTHERS THEN RETURN FALSE;
 END;
 $$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION get_user_faction_uuid(user_uuid UUID)
+    RETURNS UUID
+AS
+$$
+SELECT party_uuid
+FROM current_factions_members
+         JOIN factions ON current_factions_members.faction_id = factions.id
+WHERE current_factions_members.user_uuid = get_user_faction_uuid.user_uuid
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS current_factions_members
 (
@@ -950,6 +960,57 @@ FROM current_factions_members
          JOIN factions ON factions.id = current_factions_members.faction_id
          JOIN party_ranks ON party_ranks.id = current_factions_members.rank_id
 WHERE factions.party_uuid = get_faction_members.party_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_user_faction_rank_name(user_uuid UUID, faction_uuid UUID)
+    RETURNS TEXT
+AS
+$$
+SELECT party_ranks.name
+FROM current_factions_members
+         JOIN factions ON current_factions_members.faction_id = factions.id
+         JOIN party_ranks ON current_factions_members.rank_id = party_ranks.id
+WHERE current_factions_members.user_uuid = get_user_faction_rank_name.user_uuid
+  AND party_uuid = faction_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE delete_user_current_faction(user_uuid UUID, faction_uuid UUID)
+AS
+$$
+DELETE
+FROM current_factions_members
+WHERE current_factions_members.user_uuid = delete_user_current_faction.user_uuid
+  AND faction_id = (SELECT id FROM factions WHERE party_uuid = faction_uuid)
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE upsert_user_current_faction(user_uuid UUID, faction_uuid UUID, rank_name TEXT)
+AS
+$$
+WITH cte AS (DELETE FROM party_invites WHERE party_invites.user_uuid = upsert_user_current_faction.user_uuid AND
+                                             party_uuid = faction_uuid)
+INSERT
+INTO current_factions_members (user_uuid, faction_id, rank_id)
+VALUES (upsert_user_current_faction.user_uuid, (SELECT id FROM factions WHERE party_uuid = faction_uuid),
+        (SELECT id FROM party_ranks WHERE name = rank_name))
+ON CONFLICT (user_uuid) DO UPDATE SET rank_id = EXCLUDED.rank_id
+WHERE current_factions_members.faction_id = EXCLUDED.faction_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE handle_faction_disband(faction_uuid UUID)
+AS
+$$
+WITH cte AS (UPDATE factions SET is_disbanded = true WHERE party_uuid = faction_uuid RETURNING id)
+DELETE
+FROM current_factions_members
+WHERE faction_id = (SELECT id FROM cte)
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_current_faction_leader(faction_uuid UUID, leader_uuid UUID)
+AS
+$$
+WITH cte
+         AS (UPDATE current_factions_members SET rank_id = (SELECT id FROM party_ranks WHERE name = 'co_leader') WHERE
+        rank_id = (SELECT id FROM party_ranks WHERE name = 'leader') AND
+        faction_id = (SELECT id FROM factions WHERE party_uuid = faction_uuid) RETURNING faction_id)
+UPDATE current_factions_members
+SET rank_id = (SELECT id FROM party_ranks WHERE name = 'leader')
+WHERE user_uuid = leader_uuid
+  AND faction_id = (SELECT faction_id FROM cte)
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS faction_data
@@ -1087,6 +1148,104 @@ SELECT name,
        current_minimum_dtr +
        ((current_max_dtr - current_minimum_dtr) * regen_percentage) AS current_regen_adjusted_dtr -- minimum + (amount to be regen'd * regen percentage)
 FROM cte
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_faction_home(world_name TEXT, x INTEGER, y INTEGER, z INTEGER, pitch REAL, yaw REAL,
+                                                party_uuid UUID)
+AS
+$$
+UPDATE faction_data
+SET home_world_name = world_name,
+    home_x          = x,
+    home_y          = y,
+    home_z          = z,
+    home_pitch      = pitch,
+    home_yaw        = yaw
+WHERE faction_id = (SELECT id FROM factions WHERE factions.party_uuid = update_faction_home.party_uuid)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION update_faction_balance_subtract_return_result(amount INTEGER, party_uuid UUID)
+    RETURNS INTEGER
+AS
+$$
+UPDATE faction_data
+SET balance = balance - amount
+WHERE faction_id =
+      (SELECT id FROM factions WHERE factions.party_uuid = update_faction_balance_subtract_return_result.party_uuid)
+  AND balance >= amount
+RETURNING balance
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION update_faction_balance_add_return_result(party_uuid UUID, reason TEXT, user_uuid UUID, amount INTEGER)
+    RETURNS INTEGER
+AS
+$$
+WITH cte
+         AS (INSERT INTO faction_timestamps (faction_id, reason, user_uuid) VALUES ((SELECT id
+                                                                                     FROM factions
+                                                                                     WHERE factions.party_uuid =
+                                                                                           update_faction_balance_add_return_result.party_uuid),
+                                                                                    update_faction_balance_add_return_result.reason,
+                                                                                    update_faction_balance_add_return_result.user_uuid) RETURNING faction_id)
+UPDATE faction_data
+SET balance = balance + amount
+WHERE faction_id = (SELECT faction_id FROM cte)
+RETURNING balance
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION handle_update_faction_name_return_result(new_name TEXT, server_id INTEGER, faction_uuid UUID,
+                                                                    chat_message TEXT, user_uuid UUID)
+    RETURNS BOOLEAN
+AS
+$$
+WITH cte AS (SELECT EXISTS(SELECT *
+                           FROM factions
+                           WHERE name = new_name
+                             AND factions.server_id = handle_update_faction_name_return_result.server_id) AS exists), -- TODO -> account for disbanded
+     id
+         AS (UPDATE factions SET name = new_name WHERE party_uuid = faction_uuid AND NOT (SELECT exists FROM cte) RETURNING id)
+INSERT
+INTO faction_timestamps (faction_id, reason, user_uuid)
+SELECT (SELECT id FROM id), chat_message, handle_update_faction_name_return_result.user_uuid
+WHERE NOT (SELECT exists FROM cte)
+RETURNING NOT (SELECT exists FROM cte)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION update_withdraw_faction_balance_return_results(faction_uuid UUID, amount INTEGER)
+    RETURNS TABLE
+            (
+                withdraw_amount INTEGER,
+                balance         INTEGER
+            )
+AS
+$$
+WITH cte AS (SELECT balance, faction_id
+             FROM faction_data
+                      JOIN factions ON faction_data.faction_id = factions.id
+             WHERE party_uuid = faction_uuid)
+UPDATE faction_data
+SET balance = GREATEST(balance - amount, 0)
+WHERE faction_id = (SELECT faction_id FROM cte)
+RETURNING LEAST((SELECT cte FROM cte), amount), balance
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION update_add_faction_minimum_dtr_return_name(faction_uuid UUID, amount INTEGER)
+    RETURNS TEXT
+AS
+$$
+WITH cte AS (SELECT name, id
+             FROM factions
+             WHERE party_uuid = faction_uuid)
+UPDATE faction_data
+SET current_minimum_dtr = current_minimum_dtr + amount
+WHERE faction_id = (SELECT id FROM cte)
+RETURNING (SELECT name FROM cte)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION update_set_faction_frozen_until_return_name(faction_uuid UUID, frozen_until TIMESTAMPTZ)
+    RETURNS TEXT -- TODO -> this retroactively regens dtr if set to the past
+AS
+$$
+WITH cte AS (SELECT name, id
+             FROM factions
+             WHERE party_uuid = faction_uuid)
+UPDATE faction_data
+SET frozen_until = update_set_faction_frozen_until_return_name.frozen_until
+WHERE faction_id = (SELECT id FROM cte)
+RETURNING (SELECT name FROM cte)
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS faction_current_dtr_regen_players
@@ -1308,17 +1467,49 @@ $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS revives
 (
-    user_uuid UUID,
-    timestamp TIMESTAMPTZ DEFAULT NOW(),
-    server_id INTEGER NOT NULL,
-    reason    TEXT    NOT NULL,
+    user_uuid          UUID,
+    timestamp          TIMESTAMPTZ DEFAULT NOW(),
+    server_id          INTEGER NOT NULL,
+    reason             TEXT    NOT NULL,
+    life_cost_in_cents INTEGER NOT NULL,
     PRIMARY KEY (user_uuid, timestamp)
 );
 CREATE OR REPLACE PROCEDURE insert_revive(user_uuid UUID, server_id INTEGER, reason TEXT)
 AS
 $$
-INSERT INTO revives (user_uuid, server_id, reason)
-VALUES (insert_revive.user_uuid, insert_revive.server_id, insert_revive.reason)
+INSERT INTO revives (user_uuid, server_id, reason, life_cost_in_cents)
+VALUES (insert_revive.user_uuid, insert_revive.server_id, insert_revive.reason, 0)
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_user_hcf_lives_as_cents(user_uuid UUID)
+    RETURNS INTEGER
+AS
+$$
+WITH cte AS (SELECT COALESCE(SUM(line_item_quantity), 0) * 100
+                        AS purchased_lives_as_cents
+             FROM successful_transactions
+             WHERE successful_transactions.user_uuid = get_user_hcf_lives_as_cents.user_uuid
+               AND line_item_id = '0') -- hcf-life
+SELECT (SELECT purchased_lives_as_cents FROM cte) - COALESCE(SUM(revives.life_cost_in_cents), 0)
+FROM revives
+WHERE revives.user_uuid = get_user_hcf_lives_as_cents.user_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_if_successful(user_uuid UUID, server_id INTEGER,
+                                                                            reason TEXT, life_cost_in_cents INTEGER)
+    RETURNS REAL
+AS
+$$
+WITH cte AS (SELECT get_user_hcf_lives_as_cents(user_uuid) AS current_lives_as_cents)
+
+INSERT
+INTO revives (user_uuid, server_id, reason, life_cost_in_cents)
+SELECT handle_insert_revive_return_result_if_successful.user_uuid,
+       handle_insert_revive_return_result_if_successful.server_id,
+       handle_insert_revive_return_result_if_successful.reason,
+       handle_insert_revive_return_result_if_successful.life_cost_in_cents
+WHERE (SELECT current_lives_as_cents FROM cte) -
+      handle_insert_revive_return_result_if_successful.life_cost_in_cents > 0
+RETURNING (SELECT current_lives_as_cents FROM cte) -
+          handle_insert_revive_return_result_if_successful.life_cost_in_cents;
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS arena_data
@@ -1440,6 +1631,65 @@ FROM arena_data
 WHERE server_arenas.id = get_arena_data.arena_id
    OR server_koths.id = get_arena_data.arena_id
 $$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION upsert_server_koth_return_id(arena_name TEXT, arena_creator TEXT, server_id INTEGER,
+                                                        world_name TEXT, x INTEGER,
+                                                        y INTEGER, z INTEGER)
+    RETURNS INTEGER
+AS
+$$
+WITH cte AS
+         (
+             INSERT INTO arena_data (name, creator)
+                 VALUES (arena_name, arena_creator)
+                 ON CONFLICT (name) DO UPDATE SET creator = EXCLUDED.creator
+                 RETURNING id)
+INSERT
+INTO server_koths (arena_id, server_id, world, x, y, z)
+VALUES ((SELECT id FROM cte), upsert_server_koth_return_id.server_id, world_name, upsert_server_koth_return_id.x,
+        upsert_server_koth_return_id.y, upsert_server_koth_return_id.z)
+ON CONFLICT (arena_id, server_id) DO UPDATE SET world = EXCLUDED.world,
+                                                x     = EXCLUDED.x,
+                                                y     = EXCLUDED.y,
+                                                z     = EXCLUDED.z
+RETURNING id
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION delete_server_koth_return_id(koth_name TEXT, server_id INTEGER)
+    RETURNS INTEGER
+AS
+$$
+DELETE
+FROM server_koths
+WHERE arena_id = (SELECT id FROM arena_data WHERE name = koth_name)
+  AND server_koths.server_id = delete_server_koth_return_id.server_id
+RETURNING id
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_server_koth_datas(server_id INTEGER)
+    RETURNS TABLE
+            (
+                world   TEXT,
+                x       INTEGER,
+                y       INTEGER,
+                z       INTEGER,
+                name    TEXT,
+                CREATOR text
+            )
+AS
+$$
+SELECT world, x, y, z, name, creator
+FROM server_koths
+         JOIN arena_data ON server_koths.arena_id = arena_data.id
+WHERE server_koths.server_id = get_server_koth_datas.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_server_koth_id(koth_name TEXT, server_id INTEGER)
+    RETURNS INTEGER
+AS
+$$
+SELECT server_koths.id
+FROM server_koths
+         JOIN arena_data ON server_koths.arena_id = arena_data.id
+WHERE name = koth_name
+  AND server_koths.server_id = get_server_koth_id.server_id
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS koths
 (
@@ -1467,6 +1717,82 @@ CREATE TABLE IF NOT EXISTS koths_timestamps
     FOREIGN KEY (koth_id) REFERENCES koths (id) ON DELETE CASCADE,
     PRIMARY KEY (koth_id, timestamp, reason)
 );
+CREATE OR REPLACE FUNCTION update_koths_capper_return_optional_name(server_koth_id INTEGER, user_uuid UUID)
+    RETURNS TEXT
+AS
+$$
+WITH cte AS (SELECT koths.id, name
+             FROM koths
+                      JOIN server_koths ON koths.server_koths_id = server_koths.id
+                      JOIN arena_data ON server_koths.arena_id = arena_data.id
+             WHERE server_koths_id = server_koth_id
+               AND end_timestamp IS NULL
+               AND capping_user_uuid IS NULL)
+UPDATE koths
+SET capping_user_uuid = user_uuid
+WHERE id = (SELECT id FROM cte)
+RETURNING (SELECT name FROM cte)
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_knocked_koth_user_uuid(user_uuid UUID, server_koth_id INTEGER)
+AS
+$$
+UPDATE koths
+SET capping_user_uuid = NULL
+WHERE capping_user_uuid = user_uuid
+  AND server_koths_id = server_koth_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION update_successful_koth_capture_return_loot_factor(party_uuid UUID, server_koth_id INTEGER)
+    RETURNS INTEGER
+AS
+$$
+UPDATE koths
+SET end_timestamp      = NOW(),
+    capping_party_uuid = party_uuid
+WHERE server_koths_id = server_koth_id
+  AND end_timestamp IS NULL
+RETURNING loot_factor
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION "handle_server_koth_toggle_return_*"(koth_name TEXT, server_id INTEGER,
+                                                                koth_max_timer INTEGER,
+                                                                koth_is_movement_restricted BOOLEAN)
+    RETURNS SETOF koths
+AS
+$$
+WITH cte AS (SELECT server_koths.id
+             FROM server_koths
+                      JOIN arena_data ON server_koths.arena_id = arena_data.id
+             WHERE name = koth_name
+               AND server_koths.server_id = "handle_server_koth_toggle_return_*".server_id),
+     _ AS (UPDATE koths SET end_timestamp = NOW() WHERE end_timestamp IS NULL AND
+                                                        server_koths_id = (SELECT id FROM cte))
+INSERT
+INTO koths (server_koths_id, loot_factor, max_timer, is_movement_restricted)
+SELECT (SELECT id FROM cte),
+       (SELECT server_data.default_koth_loot_factor
+        FROM server_data
+        WHERE server_data.server_id = "handle_server_koth_toggle_return_*".server_id),
+       koth_max_timer,
+       koth_is_movement_restricted
+WHERE NOT EXISTS(SELECT *
+                 FROM koths
+                 WHERE end_timestamp IS NULL
+                   AND server_koths_id = (SELECT id FROM cte))
+RETURNING *
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION toggle_active_koth_is_movement_restricted_return_result(koth_name TEXT, server_id INTEGER)
+    RETURNS BOOLEAN
+AS
+$$
+UPDATE koths
+SET is_movement_restricted = NOT is_movement_restricted
+WHERE end_timestamp IS NULL
+  AND id = (SELECT server_koths.id
+            FROM arena_data
+                     JOIN server_koths ON arena_data.id = server_koths.arena_id
+            WHERE name = koth_name
+              AND server_koths.server_id = toggle_active_koth_is_movement_restricted_return_result.server_id)
+RETURNING is_movement_restricted
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS user_zombies_killed
 (
