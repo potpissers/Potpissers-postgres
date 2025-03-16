@@ -24,9 +24,7 @@ CREATE TABLE IF NOT EXISTS user_data
     java_personal_mutes  BYTEA,
     party_uuid           UUID
 );
-CREATE OR REPLACE PROCEDURE upsert_user_data(
-    user_uuid UUID
-)
+CREATE OR REPLACE PROCEDURE upsert_user_data(user_uuid UUID)
 AS
 $$
 INSERT INTO user_data (user_uuid)
