@@ -786,6 +786,8 @@ $$
 INSERT INTO current_parties_members (user_uuid, party_uuid, rank_id)
 VALUES (insert_current_parties_members_user.user_uuid, insert_current_parties_members_user.party_uuid,
         (SELECT id FROM party_ranks WHERE name = party_rank_name))
+ON CONFLICT (user_uuid) DO UPDATE SET rank_id = EXCLUDED.rank_id
+WHERE party_uuid = EXCLUDED.party_uuid
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE handle_insert_party_member(user_uuid UUID, party_uuid UUID, rank_name TEXT)
 AS
