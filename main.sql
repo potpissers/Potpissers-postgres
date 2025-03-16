@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS online_players
 CREATE TABLE IF NOT EXISTS server_data
 (
     server_id                         INTEGER PRIMARY KEY,
-    is_whitelisted                    BOOLEAN DEFAULT TRUE,
+    is_initially_whitelisted          BOOLEAN DEFAULT TRUE,
     attack_speed_id                   INTEGER DEFAULT 2, -- default 7cps
     death_ban_minutes                 INTEGER DEFAULT 0,
     world_border_radius               INTEGER DEFAULT 1250,
@@ -254,6 +254,15 @@ $$
 UPDATE server_data
 SET bard_strength_level = update_server_strength_limit.strength_limit
 WHERE server_id = update_server_strength_limit.server_id
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_server_is_initially_whitelisted(server_id INTEGER)
+    RETURNS BOOLEAN
+AS
+$$
+SELECT is_initially_whitelisted
+FROM server_data
+WHERE server_data.server_id = get_server_is_initially_whitelisted.server_id
+
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS player_attack_speeds
