@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS online_players
 CREATE TABLE IF NOT EXISTS server_data
 (
     server_id                         INTEGER PRIMARY KEY,
+    is_whitelisted                    BOOLEAN DEFAULT TRUE,
     attack_speed_id                   INTEGER DEFAULT 2, -- default 7cps
     death_ban_minutes                 INTEGER DEFAULT 0,
     world_border_radius               INTEGER DEFAULT 1250,
@@ -1055,9 +1056,11 @@ CREATE OR REPLACE FUNCTION get_f_list_data(server_id INTEGER, party_uuids UUID[]
 AS
 $$
 WITH cte AS (SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM (NOW() - frozen_until)) /
-                                   (SELECT dtr_max_time FROM server_data WHERE server_data.server_id = get_f_list_data.server_id),
+                                   (SELECT dtr_max_time
+                                    FROM server_data
+                                    WHERE server_data.server_id = get_f_list_data.server_id),
                                    1.0),
-                             0.0)                                                                 AS regen_percentage,
+                             0.0)                                                                             AS regen_percentage,
                     LEAST(COUNT(user_uuid) + 0.01, (SELECT dtr_max
                                                     FROM server_data
                                                     WHERE server_data.server_id = get_f_list_data.server_id)) AS current_max_dtr,
