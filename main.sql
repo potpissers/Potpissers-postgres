@@ -1,3 +1,5 @@
+SET client_min_messages TO WARNING;
+
 --TODO -> ip referrals, salt definitely necessary
 --TODO -> hash ips
 CREATE TABLE IF NOT EXISTS user_referrals
