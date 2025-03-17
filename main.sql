@@ -1063,26 +1063,26 @@ FROM faction_data
          JOIN factions ON factions.id = faction_data.faction_id
 WHERE factions.party_uuid = get_faction_data.party_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_dtr_death(server_id INTEGER, party_uuid UUID, frozen_until TIMESTAMPTZ)
+CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(server_id INTEGER, party_uuid UUID, frozen_until TIMESTAMPTZ)
     RETURNS REAL
 AS
 $$
 WITH cte AS (WITH cte AS (SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM (NOW() - faction_data.frozen_until)) /
                                                 (SELECT dtr_max_time
                                                  FROM server_data
-                                                 WHERE server_data.server_id = handle_dtr_death.server_id),
+                                                 WHERE server_data.server_id = handle_dtr_death_return_result.server_id),
                                                 1.0),
-                                          0.0)                                                                              AS regen_percentage,
+                                          0.0)                                                                                            AS regen_percentage,
                                  LEAST(COUNT(user_uuid) + 0.01, (SELECT dtr_max
                                                                  FROM server_data
-                                                                 WHERE server_data.server_id = handle_dtr_death.server_id)) AS current_max_dtr,
+                                                                 WHERE server_data.server_id = handle_dtr_death_return_result.server_id)) AS current_max_dtr,
                                  current_minimum_dtr,
                                  faction_data.faction_id
                           FROM faction_data
                                    JOIN faction_current_dtr_regen_players
                                         ON faction_data.faction_id = faction_current_dtr_regen_players.faction_id
                                    JOIN factions ON factions.id = faction_data.faction_id
-                          WHERE factions.party_uuid = handle_dtr_death.party_uuid
+                          WHERE factions.party_uuid = handle_dtr_death_return_result.party_uuid
                           GROUP BY faction_data.frozen_until, current_minimum_dtr, faction_data.faction_id)
              SELECT faction_id,
                     current_max_dtr,
@@ -1095,7 +1095,7 @@ WITH cte AS (WITH cte AS (SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM (NOW() - fact
                  VALUES ((SELECT faction_id FROM cte),
                          GREATEST((SELECT current_regen_adjusted_dtr FROM cte) - 1,
                                   LEAST(-(SELECT current_max_dtr FROM cte),
-                                        (SELECT current_regen_adjusted_dtr FROM cte))), handle_dtr_death.frozen_until)
+                                        (SELECT current_regen_adjusted_dtr FROM cte))), handle_dtr_death_return_result.frozen_until)
                  ON CONFLICT (faction_id) DO UPDATE SET current_minimum_dtr = EXCLUDED.current_minimum_dtr,
                      frozen_until = EXCLUDED.frozen_until
                  RETURNING faction_id, current_minimum_dtr)
@@ -1133,6 +1133,31 @@ WITH cte AS (SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM (NOW() - frozen_until)) /
 SELECT frozen_until,
        current_max_dtr,
        current_minimum_dtr +
+       ((current_max_dtr - current_minimum_dtr) * regen_percentage) AS current_regen_adjusted_dtr -- minimum + (amount to be regen'd * regen percentage)
+FROM cte
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_dtr(server_id INTEGER, party_uuid UUID)
+    RETURNS REAL
+AS
+$$
+WITH cte AS (SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM (NOW() - frozen_until)) /
+                                   (SELECT dtr_max_time
+                                    FROM server_data
+                                    WHERE server_data.server_id = get_dtr.server_id),
+                                   1.0),
+                             0.0)                                                                     AS regen_percentage,
+                    LEAST(COUNT(user_uuid) + 0.01, (SELECT dtr_max
+                                                    FROM server_data
+                                                    WHERE server_data.server_id = get_dtr.server_id)) AS current_max_dtr,
+                    current_minimum_dtr,
+                    frozen_until
+             FROM faction_data
+                      LEFT JOIN faction_current_dtr_regen_players
+                                ON faction_data.faction_id = faction_current_dtr_regen_players.faction_id
+                      JOIN factions ON factions.id = faction_data.faction_id
+             WHERE factions.party_uuid = get_dtr.party_uuid
+             GROUP BY frozen_until, current_minimum_dtr)
+SELECT current_minimum_dtr +
        ((current_max_dtr - current_minimum_dtr) * regen_percentage) AS current_regen_adjusted_dtr -- minimum + (amount to be regen'd * regen percentage)
 FROM cte
 $$ LANGUAGE sql;
@@ -1541,23 +1566,27 @@ SELECT (SELECT purchased_lives_as_cents FROM cte) - COALESCE(SUM(revives.life_co
 FROM revives
 WHERE revives.user_uuid = get_user_hcf_lives_as_cents.user_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_if_successful(reviver_uuid UUID, server_id INTEGER,
-                                                                            reason TEXT, life_cost_in_cents INTEGER)
-    RETURNS REAL
+CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_in_cents_if_successful(reviver_uuid UUID,
+                                                                                     revived_uuid UUID,
+                                                                                     server_id INTEGER,
+                                                                                     reason TEXT,
+                                                                                     life_cost_in_cents INTEGER)
+    RETURNS INTEGER
 AS
 $$
 WITH cte AS (SELECT get_user_hcf_lives_as_cents(reviver_uuid) AS current_lives_as_cents)
 
 INSERT
-INTO revives (user_uuid, server_id, reason, life_cost_in_cents)
-SELECT handle_insert_revive_return_result_if_successful.user_uuid,
-       handle_insert_revive_return_result_if_successful.server_id,
-       handle_insert_revive_return_result_if_successful.reason,
-       handle_insert_revive_return_result_if_successful.life_cost_in_cents
+INTO revives (revived_user_uuid, server_id, reason, reviver_user_uuid, life_cost_in_cents)
+SELECT revived_uuid,
+       handle_insert_revive_return_result_in_cents_if_successful.server_id,
+       handle_insert_revive_return_result_in_cents_if_successful.reason,
+       reviver_uuid,
+       handle_insert_revive_return_result_in_cents_if_successful.life_cost_in_cents
 WHERE (SELECT current_lives_as_cents FROM cte) -
-      handle_insert_revive_return_result_if_successful.life_cost_in_cents > 0
+      handle_insert_revive_return_result_in_cents_if_successful.life_cost_in_cents > 0
 RETURNING (SELECT current_lives_as_cents FROM cte) -
-          handle_insert_revive_return_result_if_successful.life_cost_in_cents;
+          handle_insert_revive_return_result_in_cents_if_successful.life_cost_in_cents;
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS arena_data
