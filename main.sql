@@ -209,6 +209,13 @@ ON CONFLICT (server_id) DO UPDATE SET server_id = EXCLUDED.server_id
 RETURNING *,
         (SELECT name FROM attack_speeds WHERE id = attack_speed_id) AS attack_speed_name;
 $$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_server_default_loot_factor(loot_factor INTEGER, server_id INTEGER)
+AS
+$$
+UPDATE server_data
+SET default_koth_loot_factor = loot_factor
+WHERE server_id = update_server_default_loot_factor.server_id;
+$$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE update_server_death_ban_minutes(death_ban_minutes INTEGER, server_id INTEGER)
 AS
 $$
@@ -1792,9 +1799,9 @@ WHERE server_koths_id = server_koth_id
   AND end_timestamp IS NULL
 RETURNING loot_factor
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION "handle_server_koth_toggle_return_*"(koth_name TEXT, server_id INTEGER,
-                                                                koth_max_timer INTEGER,
-                                                                koth_is_movement_restricted BOOLEAN)
+CREATE OR REPLACE FUNCTION handle_server_koth_toggle_return_star(koth_name TEXT, server_id INTEGER,
+                                                                 koth_max_timer INTEGER,
+                                                                 koth_is_movement_restricted BOOLEAN)
     RETURNS SETOF koths
 AS
 $$
@@ -1802,7 +1809,7 @@ WITH cte AS (SELECT server_koths.id
              FROM server_koths
                       JOIN arena_data ON server_koths.arena_id = arena_data.id
              WHERE name = koth_name
-               AND server_koths.server_id = "handle_server_koth_toggle_return_*".server_id),
+               AND server_koths.server_id = handle_server_koth_toggle_return_star.server_id),
      _ AS (UPDATE koths SET end_timestamp = NOW() WHERE end_timestamp IS NULL AND
                                                         server_koths_id = (SELECT id FROM cte))
 INSERT
@@ -1810,7 +1817,7 @@ INTO koths (server_koths_id, loot_factor, max_timer, is_movement_restricted)
 SELECT (SELECT id FROM cte),
        (SELECT server_data.default_koth_loot_factor
         FROM server_data
-        WHERE server_data.server_id = "handle_server_koth_toggle_return_*".server_id),
+        WHERE server_data.server_id = handle_server_koth_toggle_return_star.server_id),
        koth_max_timer,
        koth_is_movement_restricted
 WHERE NOT EXISTS(SELECT *
