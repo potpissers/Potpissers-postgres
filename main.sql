@@ -1892,7 +1892,7 @@ FROM user_diamond_ores_mined
 WHERE user_diamond_ores_mined.user_uuid = get_user_diamond_ores_mined.user_uuid
   AND user_diamond_ores_mined.server_id = get_user_diamond_ores_mined.server_id
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_diamond_ores_mined_upsert_return_results(user_uuid UUID, server_id INTEGER, amount INTEGER, party_uuid INTEGER)
+CREATE OR REPLACE FUNCTION handle_diamond_ores_mined_upsert_return_results(user_uuid UUID, server_id INTEGER, amount INTEGER, party_uuid UUID)
     RETURNS TABLE
             (
                 user_diamonds_mined    INTEGER,
