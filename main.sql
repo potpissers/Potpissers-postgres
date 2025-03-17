@@ -168,31 +168,7 @@ CREATE TABLE IF NOT EXISTS server_data
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
 CREATE OR REPLACE FUNCTION upsert_server_return_data(server_name TEXT)
-    RETURNS TABLE -- TODO record (?)
-            (
-                server_id                         INTEGER,
-                attack_speed_id                   INTEGER,
-                death_ban_minutes                 INTEGER,
-                world_border_radius               INTEGER,
-                default_kit_name                  TEXT,
-                sharpness_limit                   INTEGER,
-                power_limit                       INTEGER,
-                protection_limit                  INTEGER,
-                bard_regen_level                  INTEGER,
-                bard_strength_level               INTEGER,
-                is_weakness_enabled               BOOLEAN,
-                is_bard_passive_debuffing_enabled BOOLEAN,
-                dtr_freeze_timer                  INTEGER,
-                dtr_max                           REAL,
-                dtr_max_time                      INTEGER,
-                dtr_off_peak_freeze_time          INTEGER,
-                dtr_peak_freeze_time              INTEGER,
-                off_peak_lives_needed_as_cents    INTEGER,
-                bard_radius                       INTEGER,
-                rogue_radius                      INTEGER,
-
-                attack_speed_name                 TEXT
-            )
+    RETURNS SETOF server_data
 AS
 $$
 WITH cte AS (
