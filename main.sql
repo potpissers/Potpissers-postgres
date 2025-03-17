@@ -1901,15 +1901,17 @@ CREATE OR REPLACE FUNCTION handle_diamond_ores_mined_upsert_return_results(user_
 AS
 $$
 WITH cte
-         AS (INSERT INTO user_diamond_ores_mined (user_uuid, server_id, amount) VALUES (foo.user_uuid, foo.server_id, foo.amount) ON CONFLICT (user_uuid, server_id) DO UPDATE SET amount = amount + EXCLUDED.amount RETURNING amount AS user_diamonds_mined, server_id),
+         AS (INSERT INTO user_diamond_ores_mined (user_uuid, server_id, amount) VALUES (handle_diamond_ores_mined_upsert_return_results.user_uuid,
+                                                                                        handle_diamond_ores_mined_upsert_return_results.server_id,
+                                                                                        handle_diamond_ores_mined_upsert_return_results.amount) ON CONFLICT (user_uuid, server_id) DO UPDATE SET amount = amount + EXCLUDED.amount RETURNING amount AS user_diamonds_mined, server_id),
      foo AS (
          INSERT
              INTO faction_diamond_ores_mined (faction_id, amount)
-                 SELECT id, foo.amount
+                 SELECT id, handle_diamond_ores_mined_upsert_return_results.amount
                  FROM factions
-                 WHERE factions.party_uuid = foo.party_uuid
-                   AND factions.server_id = foo.server_id
-                   AND foo.party_uuid IS NOT NULL
+                 WHERE factions.party_uuid = handle_diamond_ores_mined_upsert_return_results.party_uuid
+                   AND factions.server_id = handle_diamond_ores_mined_upsert_return_results.server_id
+                   AND handle_diamond_ores_mined_upsert_return_results.party_uuid IS NOT NULL
                  ON CONFLICT (faction_id) DO UPDATE SET amount = amount + EXCLUDED.amount RETURNING amount AS faction_diamonds_mined)
 SELECT (SELECT user_diamonds_mined FROM cte)    AS user_diamonds_mined,
        (SELECT faction_diamonds_mined FROM foo) AS faction_diamonds_mined
