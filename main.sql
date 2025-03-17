@@ -1514,18 +1514,19 @@ $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS revives
 (
-    user_uuid          UUID,
+    id                 INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    revived_user_uuid  UUID    NOT NULL,
     timestamp          TIMESTAMPTZ DEFAULT NOW(),
     server_id          INTEGER NOT NULL,
     reason             TEXT    NOT NULL,
-    life_cost_in_cents INTEGER NOT NULL,
-    PRIMARY KEY (user_uuid, timestamp)
+    reviver_user_uuid  UUID    NOT NULL,
+    life_cost_in_cents INTEGER NOT NULL
 );
-CREATE OR REPLACE PROCEDURE insert_revive(user_uuid UUID, server_id INTEGER, reason TEXT)
+CREATE OR REPLACE PROCEDURE insert_revive(revived_uuid UUID, server_id INTEGER, reason TEXT, reviver_uuid UUID)
 AS
 $$
-INSERT INTO revives (user_uuid, server_id, reason, life_cost_in_cents)
-VALUES (insert_revive.user_uuid, insert_revive.server_id, insert_revive.reason, 0)
+INSERT INTO revives (revived_user_uuid, server_id, reason, reviver_user_uuid, life_cost_in_cents)
+VALUES (revived_uuid, insert_revive.server_id, insert_revive.reason, reviver_uuid, 0)
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_user_hcf_lives_as_cents(user_uuid UUID)
     RETURNS INTEGER
@@ -1540,12 +1541,12 @@ SELECT (SELECT purchased_lives_as_cents FROM cte) - COALESCE(SUM(revives.life_co
 FROM revives
 WHERE revives.user_uuid = get_user_hcf_lives_as_cents.user_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_if_successful(user_uuid UUID, server_id INTEGER,
+CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_if_successful(reviver_uuid UUID, server_id INTEGER,
                                                                             reason TEXT, life_cost_in_cents INTEGER)
     RETURNS REAL
 AS
 $$
-WITH cte AS (SELECT get_user_hcf_lives_as_cents(user_uuid) AS current_lives_as_cents)
+WITH cte AS (SELECT get_user_hcf_lives_as_cents(reviver_uuid) AS current_lives_as_cents)
 
 INSERT
 INTO revives (user_uuid, server_id, reason, life_cost_in_cents)
