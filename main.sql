@@ -736,16 +736,15 @@ CREATE TABLE IF NOT EXISTS current_parties_relations
     is_ally_else_enemy BOOLEAN NOT NULL,
     PRIMARY KEY (party_uuid, party_arg_uuid)
 );
-CREATE OR REPLACE FUNCTION get_party_relations_names(party_uuid UUID)
+CREATE OR REPLACE FUNCTION get_party_relations(party_uuid UUID)
     RETURNS TABLE
             (
                 party_arg_uuid     UUID,
-                is_ally_else_enemy BOOLEAN,
-                name               TEXT
+                is_ally_else_enemy BOOLEAN
             )
 AS
 $$
-SELECT party_arg_uuid, is_ally_else_enemy, name
+SELECT party_arg_uuid, is_ally_else_enemy
 FROM current_parties_relations
 WHERE current_parties_relations.party_uuid = get_party_relations_names.party_uuid
 $$ LANGUAGE sql;
