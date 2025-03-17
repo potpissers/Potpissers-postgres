@@ -98,6 +98,14 @@ SELECT COALESCE((SELECT name
                  LIMIT 1), 'default');
 $$
     LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE insert_user_hcf_life(user_uuid UUID, user_name TEXT, amount INTEGER)
+AS
+$$
+INSERT INTO successful_transactions (user_uuid, line_item_id, line_item_player_name,
+                                     line_item_quantity, amount_as_cents)
+VALUES (insert_user_hcf_life.user_uuid, '0', user_name, amount, 0)
+$$
+    LANGUAGE sql;
 
 --TODO -> users id table (?)
 
@@ -272,7 +280,14 @@ $$
 SELECT is_initially_whitelisted
 FROM server_data
 WHERE server_data.server_id = get_server_is_initially_whitelisted.server_id
-
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_server_max_dtr(server_id INTEGER)
+    RETURNS REAL
+AS
+$$
+SELECT dtr_max
+FROM server_data
+WHERE server_data.server_id = get_server_max_dtr.server_id
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS player_attack_speeds
@@ -1032,6 +1047,16 @@ SET rank_id = (SELECT id FROM party_ranks WHERE name = 'leader')
 WHERE user_uuid = leader_uuid
   AND faction_id = (SELECT faction_id FROM cte)
 $$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_faction_max_dtr(server_id INTEGER, faction_uuid UUID)
+    RETURNS REAL
+AS
+$$
+SELECT LEAST(COUNT(user_uuid) + 0.01,
+             (SELECT dtr_max FROM server_data WHERE server_data.server_id = get_faction_max_dtr.server_id))
+FROM current_factions_members
+         JOIN factions ON current_factions_members.faction_id = factions.id
+WHERE party_uuid = faction_uuid
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS faction_data
 (
@@ -1063,47 +1088,36 @@ FROM faction_data
          JOIN factions ON factions.id = faction_data.faction_id
 WHERE factions.party_uuid = get_faction_data.party_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(server_id INTEGER, party_uuid UUID, frozen_until TIMESTAMPTZ)
-    RETURNS REAL
+CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(server_id INTEGER, faction_uuid UUID, new_dtr_regen_players UUID[])
+    RETURNS TABLE
+            (
+                current_minimum_dtr REAL,
+                frozen_until        TIMESTAMPTZ,
+                dtr_freeze_timer    INTEGER
+            )
 AS
 $$
-WITH cte AS (WITH cte AS (SELECT GREATEST(LEAST(EXTRACT(EPOCH FROM (NOW() - faction_data.frozen_until)) /
-                                                (SELECT dtr_max_time
-                                                 FROM server_data
-                                                 WHERE server_data.server_id = handle_dtr_death_return_result.server_id),
-                                                1.0),
-                                          0.0)                                                                                            AS regen_percentage,
-                                 LEAST(COUNT(user_uuid) + 0.01, (SELECT dtr_max
-                                                                 FROM server_data
-                                                                 WHERE server_data.server_id = handle_dtr_death_return_result.server_id)) AS current_max_dtr,
-                                 current_minimum_dtr,
-                                 faction_data.faction_id
-                          FROM faction_data
-                                   JOIN faction_current_dtr_regen_players
-                                        ON faction_data.faction_id = faction_current_dtr_regen_players.faction_id
-                                   JOIN factions ON factions.id = faction_data.faction_id
-                          WHERE factions.party_uuid = handle_dtr_death_return_result.party_uuid
-                          GROUP BY faction_data.frozen_until, current_minimum_dtr, faction_data.faction_id)
-             SELECT faction_id,
-                    current_max_dtr,
-                    current_minimum_dtr +
-                    ((current_max_dtr - current_minimum_dtr) * regen_percentage) AS current_regen_adjusted_dtr -- minimum + (amount to be regen'd * regen percentage)
-             FROM cte),
-     dtr_freeze AS (
-         INSERT
-             INTO faction_data (faction_id, current_minimum_dtr, frozen_until)
-                 VALUES ((SELECT faction_id FROM cte),
-                         GREATEST((SELECT current_regen_adjusted_dtr FROM cte) - 1,
-                                  LEAST(-(SELECT current_max_dtr FROM cte),
-                                        (SELECT current_regen_adjusted_dtr FROM cte))), handle_dtr_death_return_result.frozen_until)
-                 ON CONFLICT (faction_id) DO UPDATE SET current_minimum_dtr = EXCLUDED.current_minimum_dtr,
-                     frozen_until = EXCLUDED.frozen_until
-                 RETURNING faction_id, current_minimum_dtr)
-DELETE
-FROM faction_current_dtr_regen_players
-WHERE faction_id = (SELECT faction_id FROM dtr_freeze)
-RETURNING (SELECT current_minimum_dtr FROM dtr_freeze)
-$$ LANGUAGE sql;
+WITH cte AS (SELECT dtr_freeze_timer
+             FROM server_data
+             WHERE server_data.server_id = handle_dtr_death_return_result.server_id),
+     bar AS (
+         UPDATE faction_data
+             SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
+                 frozen_until = NOW() + (SELECT dtr_freeze_timer
+                                         FROM cte)
+             WHERE faction_id = (SELECT id FROM factions WHERE party_uuid = faction_uuid)
+             RETURNING faction_id, current_minimum_dtr, frozen_until),
+     _ as (
+         DELETE
+             FROM faction_current_dtr_regen_players
+                 WHERE faction_id = (SELECT faction_id FROM cte))
+INSERT
+INTO faction_current_dtr_regen_players (faction_id, user_uuid)
+SELECT faction_id, UNNEST(new_dtr_regen_players)
+FROM bar
+RETURNING (SELECT current_minimum_dtr FROM bar), (SELECT frozen_until FROM bar), (SELECT dtr_freeze_timer FROM cte);
+$$
+    LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_dtr_data(server_id INTEGER, party_uuid UUID)
     RETURNS TABLE
             (
@@ -1569,24 +1583,26 @@ $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_in_cents_if_successful(reviver_uuid UUID,
                                                                                      revived_uuid UUID,
                                                                                      server_id INTEGER,
-                                                                                     reason TEXT,
-                                                                                     life_cost_in_cents INTEGER)
+                                                                                     reason TEXT)
     RETURNS INTEGER
 AS
 $$
-WITH cte AS (SELECT get_user_hcf_lives_as_cents(reviver_uuid) AS current_lives_as_cents)
-
+WITH cte AS (SELECT get_user_hcf_lives_as_cents(reviver_uuid) AS current_lives_as_cents),
+     bar
+         AS (SELECT off_peak_lives_needed_as_cents * CASE
+                                                         WHEN get_is_koth_active(handle_insert_revive_return_result_in_cents_if_successful.server_id)
+                                                             THEN .5
+                                                         ELSE 1 END AS life_cost_in_cents
+             FROM server_data)
 INSERT
 INTO revives (revived_user_uuid, server_id, reason, reviver_user_uuid, life_cost_in_cents)
 SELECT revived_uuid,
        handle_insert_revive_return_result_in_cents_if_successful.server_id,
        handle_insert_revive_return_result_in_cents_if_successful.reason,
        reviver_uuid,
-       handle_insert_revive_return_result_in_cents_if_successful.life_cost_in_cents
-WHERE (SELECT current_lives_as_cents FROM cte) -
-      handle_insert_revive_return_result_in_cents_if_successful.life_cost_in_cents > 0
-RETURNING (SELECT current_lives_as_cents FROM cte) -
-          handle_insert_revive_return_result_in_cents_if_successful.life_cost_in_cents;
+       (SELECT life_cost_in_cents FROM bar)
+WHERE (SELECT current_lives_as_cents FROM cte) - (SELECT life_cost_in_cents FROM bar) > 0
+RETURNING (SELECT current_lives_as_cents FROM cte) - (SELECT life_cost_in_cents FROM bar);
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS arena_data
@@ -1869,6 +1885,12 @@ WHERE end_timestamp IS NULL
             WHERE name = koth_name
               AND server_koths.server_id = toggle_active_koth_is_movement_restricted_return_result.server_id)
 RETURNING is_movement_restricted
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_is_koth_active(server_id INTEGER)
+    RETURNS BOOLEAN
+AS
+$$
+SELECT EXISTS (SELECT * FROM koths WHERE server_id = get_is_koth_active.server_id AND end_timestamp IS NULL)
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS user_zombies_killed
