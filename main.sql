@@ -1912,7 +1912,9 @@ WITH cte
                  WHERE factions.party_uuid = handle_diamond_ores_mined_upsert_return_results.party_uuid
                    AND factions.server_id = handle_diamond_ores_mined_upsert_return_results.server_id
                    AND handle_diamond_ores_mined_upsert_return_results.party_uuid IS NOT NULL
-                 ON CONFLICT (faction_id) DO UPDATE SET amount = amount + EXCLUDED.amount RETURNING amount AS faction_diamonds_mined)
+                 ON CONFLICT (faction_id) DO UPDATE SET faction_diamond_ores_mined.amount =
+                         faction_diamond_ores_mined.amount +
+                         EXCLUDED.amount RETURNING faction_diamond_ores_mined.amount AS faction_diamonds_mined)
 SELECT (SELECT user_diamonds_mined FROM cte)    AS user_diamonds_mined,
        (SELECT faction_diamonds_mined FROM foo) AS faction_diamonds_mined
 $$ LANGUAGE sql;
