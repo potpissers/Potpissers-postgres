@@ -1233,7 +1233,7 @@ WITH cte AS (SELECT balance, faction_id
 UPDATE faction_data
 SET balance = GREATEST(balance - amount, 0)
 WHERE faction_id = (SELECT faction_id FROM cte)
-RETURNING LEAST((SELECT cte FROM cte), amount), balance
+RETURNING LEAST((SELECT balance FROM cte), amount), balance
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION update_add_faction_minimum_dtr_return_name(faction_uuid UUID, amount INTEGER)
     RETURNS TEXT
