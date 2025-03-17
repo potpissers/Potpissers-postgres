@@ -746,7 +746,7 @@ AS
 $$
 SELECT party_arg_uuid, is_ally_else_enemy
 FROM current_parties_relations
-WHERE current_parties_relations.party_uuid = get_party_relations_names.party_uuid
+WHERE current_parties_relations.party_uuid = get_party_relations.party_uuid
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE delete_party_relation(party_uuid UUID, party_arg_uuid UUID)
 AS
