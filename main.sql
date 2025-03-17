@@ -1904,8 +1904,8 @@ WITH cte
          AS (INSERT INTO user_diamond_ores_mined (user_uuid, server_id, amount) VALUES (handle_diamond_ores_mined_upsert_return_results.user_uuid,
                                                                                         handle_diamond_ores_mined_upsert_return_results.server_id,
                                                                                         handle_diamond_ores_mined_upsert_return_results.amount) ON CONFLICT (user_uuid, server_id) DO UPDATE SET
-        user_diamond_ores_mined.amount = user_diamond_ores_mined.amount +
-                                         EXCLUDED.amount RETURNING user_diamond_ores_mined.amount AS user_diamonds_mined),
+        amount = amount +
+                 EXCLUDED.amount RETURNING amount AS user_diamonds_mined),
      foo AS (
          INSERT
              INTO faction_diamond_ores_mined (faction_id, amount)
