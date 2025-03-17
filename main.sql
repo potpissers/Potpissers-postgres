@@ -207,12 +207,12 @@ ON CONFLICT (server_id) DO UPDATE SET server_id = EXCLUDED.server_id
 RETURNING *,
         (SELECT name FROM attack_speeds WHERE id = attack_speed_id) AS attack_speed_name;
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE update_server_death_ban_data(death_ban_minutes INTEGER, server_id INTEGER)
+CREATE OR REPLACE PROCEDURE update_server_death_ban_minutes(death_ban_minutes INTEGER, server_id INTEGER)
 AS
 $$
 UPDATE server_data
-SET death_ban_minutes = update_server_death_ban_data.death_ban_minutes
-WHERE server_id = update_server_death_ban_data.server_id;
+SET death_ban_minutes = update_server_death_ban_minutes.death_ban_minutes
+WHERE server_id = update_server_death_ban_minutes.server_id;
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE update_server_attack_speed(attack_speed_name TEXT, server_id INTEGER)
 AS
@@ -747,7 +747,6 @@ AS
 $$
 SELECT party_arg_uuid, is_ally_else_enemy, name
 FROM current_parties_relations
-         LEFT JOIN factions ON party_arg_uuid = factions.party_uuid
 WHERE current_parties_relations.party_uuid = get_party_relations_names.party_uuid
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE delete_party_relation(party_uuid UUID, party_arg_uuid UUID)
@@ -841,6 +840,19 @@ $$
 SELECT party_uuid
 FROM current_parties_members
 WHERE current_parties_members.user_uuid = get_user_party_uuid.user_uuid
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_party_members(party_uuid UUID)
+    RETURNS TABLE
+            (
+                user_uuid UUID,
+                name      TEXT
+            )
+AS
+$$
+SELECT user_uuid, name
+FROM current_parties_members
+         JOIN party_ranks ON id = rank_id
+WHERE current_parties_members.party_uuid = get_party_members.party_uuid
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE insert_current_parties_members_user(user_uuid UUID, party_uuid UUID, party_rank_name TEXT)
 AS
@@ -1433,15 +1445,42 @@ CREATE TABLE IF NOT EXISTS current_deathbans
     ip          TEXT,
     FOREIGN KEY (deathban_id) REFERENCES deathbans (death_id) ON DELETE CASCADE
 );
-CREATE OR REPLACE PROCEDURE insert_deathban(death_id INTEGER, expiration TIMESTAMPTZ, ip TEXT)
+CREATE OR REPLACE FUNCTION handle_insert_deathban_return_duration_data_if_inserted(server_id INTEGER,
+                                                                                   user_seconds_played INTEGER,
+                                                                                   death_id INTEGER, ip TEXT)
+    RETURNS TABLE
+            (
+                death_ban_seconds   INTEGER,
+                deathban_expiration TIMESTAMPTZ
+            )
 AS
 $$
-WITH _ AS (INSERT INTO deathbans (death_id, expiration) VALUES (insert_deathban.death_id, insert_deathban.expiration))
-INSERT
-INTO current_deathbans (deathban_id, ip)
-VALUES (insert_deathban.death_id, insert_deathban.ip);
+DECLARE
+    death_ban_seconds   INTEGER;
+    deathban_expiration TIMESTAMPTZ;
+BEGIN
+    SELECT LEAST(death_ban_minutes * 60, user_seconds_played)
+    INTO death_ban_seconds
+    FROM server_data
+    WHERE server_data.server_id =
+          handle_insert_deathban_return_duration_data_if_inserted.server_id;
+
+    INSERT INTO deathbans (death_id, expiration)
+    SELECT handle_insert_deathban_return_duration_data_if_inserted.death_id,
+           NOW() + death_ban_seconds -- TODO ?
+    WHERE death_ban_seconds > 0
+    RETURNING expiration INTO deathban_expiration;
+
+    INSERT
+    INTO current_deathbans (deathban_id, ip)
+    SELECT handle_insert_deathban_return_duration_data_if_inserted.death_id,
+           handle_insert_deathban_return_duration_data_if_inserted.ip
+    WHERE death_ban_seconds > 0;
+
+    SELECT death_ban_seconds, deathban_expiration;
+END
 $$
-    LANGUAGE sql;
+    LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION get_farthest_user_ip_deathban(user_uuid UUID, ip TEXT, server_id INTEGER)
     RETURNS TABLE
             (
