@@ -1578,7 +1578,7 @@ WITH cte AS (SELECT COALESCE(SUM(line_item_quantity), 0) * 100
                AND line_item_id = '0') -- hcf-life
 SELECT (SELECT purchased_lives_as_cents FROM cte) - COALESCE(SUM(revives.life_cost_in_cents), 0)
 FROM revives
-WHERE revives.user_uuid = get_user_hcf_lives_as_cents.user_uuid
+WHERE revives.reviver_user_uuid = get_user_hcf_lives_as_cents.user_uuid
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_in_cents_if_successful(reviver_uuid UUID,
                                                                                      revived_uuid UUID,
