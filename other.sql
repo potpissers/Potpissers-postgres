@@ -6,6 +6,27 @@ CREATE TABLE IF NOT EXISTS kollusion_spawns
     y          INTEGER NOT NULL,
     z          INTEGER NOT NULL
 );
+CREATE OR REPLACE PROCEDURE upsert_kollusion_spawn(spawn_name TEXT, spawn_world_name TEXT, spawn_x INTEGER,
+                                                   spawn_y INTEGER,
+                                                   spawn_z INTEGER)
+AS
+$$
+INSERT INTO kollusion_spawns (name, world_name, x, y, z)
+VALUES (spawn_name, spawn_world_name, spawn_x, spawn_y, spawn_z)
+ON CONFLICT (name) DO UPDATE SET world_name = EXCLUDED.world_name,
+                                 x          = EXCLUDED.x,
+                                 y          = EXCLUDED.y,
+                                 z          = EXCLUDED.z
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_kollusion_spawns()
+    RETURNS SETOF kollusion_spawns
+AS
+$$
+SELECT *
+FROM kollusion_spawns
+$$
+    LANGUAGE sql;
 
 DROP TABLE server_tips;
 CREATE TABLE server_tips

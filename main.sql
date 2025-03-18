@@ -1462,6 +1462,38 @@ CREATE TABLE IF NOT EXISTS current_bandits
     ip        TEXT NOT NULL,
     FOREIGN KEY (bandit_id) REFERENCES bandits (id)
 );
+CREATE OR REPLACE FUNCTION get_user_is_bandit(user_uuid UUID, server_id INTEGER, user_ip TEXT)
+    RETURNS BOOLEAN
+AS
+$$
+WITH cte AS (SELECT EXISTS(SELECT *
+                           FROM ip_exempt_uuids
+                           WHERE get_user_is_bandit.user_uuid = ?
+                             AND get_user_is_bandit.server_id = ?) AS is_ip_exempt)
+SELECT EXISTS(SELECT expiration_timestamp
+              FROM bandits
+                       JOIN current_bandits ON bandits.id = current_bandits.bandit_id
+              WHERE bandits.server_id = get_user_is_bandit.server_id
+                AND expiration_timestamp > NOW()
+                AND (bandits.user_uuid = get_user_is_bandit.user_uuid OR
+                     (current_bandits.ip = user_ip AND NOT (SELECT is_ip_exempt FROM cte))))
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE insert_bandit(bandit_uuid UUID, server_id INTEGER, death_id INTEGER, expiration TIMESTAMPTZ,
+                                bandit_message TEXT, ip TEXT)
+AS
+$$
+WITH cte
+         AS (INSERT INTO bandits (user_uuid, server_id, death_id, expiration_timestamp, bandit_message) VALUES (bandit_uuid,
+                                                                                                                insert_bandit.server_id,
+                                                                                                                insert_bandit.death_id,
+                                                                                                                expiration,
+                                                                                                                insert_bandit.bandit_message) RETURNING id)
+INSERT
+INTO current_bandits (bandit_id, ip)
+VALUES ((SELECT id FROM cte), insert_bandit.ip)
+$$
+    LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS deathbans
 (
