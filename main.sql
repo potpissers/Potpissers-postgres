@@ -1468,8 +1468,8 @@ AS
 $$
 WITH cte AS (SELECT EXISTS(SELECT *
                            FROM ip_exempt_uuids
-                           WHERE get_user_is_bandit.user_uuid = ?
-                             AND get_user_is_bandit.server_id = ?) AS is_ip_exempt)
+                           WHERE ip_exempt_uuids.user_uuid = get_user_is_bandit.user_uuid
+                             AND ip_exempt_uuids.server_id = get_user_is_bandit.server_id) AS is_ip_exempt)
 SELECT EXISTS(SELECT expiration_timestamp
               FROM bandits
                        JOIN current_bandits ON bandits.id = current_bandits.bandit_id
