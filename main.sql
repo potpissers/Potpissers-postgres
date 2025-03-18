@@ -1103,7 +1103,7 @@ WITH cte AS (SELECT dtr_freeze_timer
      bar AS (
          UPDATE faction_data
              SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
-                 frozen_until = NOW() + (SELECT dtr_freeze_timer
+                 frozen_until = NOW() + (SELECT dtr_freeze_timer * INTERVAL '1 second'
                                          FROM cte)
              WHERE faction_id = (SELECT id FROM factions WHERE party_uuid = faction_uuid)
              RETURNING faction_id, current_minimum_dtr, frozen_until),
@@ -1514,7 +1514,7 @@ BEGIN
 
     INSERT INTO deathbans (death_id, expiration)
     SELECT handle_insert_deathban_return_duration_data_if_inserted.death_id,
-           NOW() + death_ban_seconds -- TODO ?
+           NOW() + death_ban_seconds -- TODO ? this doesn't work in sql, it MIGHT work in plpgsql ?
     WHERE death_ban_seconds > 0
     RETURNING expiration INTO deathban_expiration;
 
