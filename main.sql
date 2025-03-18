@@ -2185,6 +2185,5 @@ DELETE
 FROM current_deathbans
 WHERE deathban_id NOT IN (SELECT death_id FROM valid_deathbans);
 
-\i donate.sql
 \i other.sql
 \i users.sql
