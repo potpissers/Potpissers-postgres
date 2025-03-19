@@ -27,7 +27,7 @@ CREATE OR REPLACE FUNCTION get_12_newest_players()
             (
                 user_uuid  UUID,
                 referrer   TEXT,
-                timestamp  TIMESTAMPTZ,
+                "timestamp"  TIMESTAMPTZ,
                 row_number INTEGER
             )
 AS
