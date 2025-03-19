@@ -2258,7 +2258,7 @@ FROM koths
          JOIN server_koths ON server_koths_id = server_koths.id
          JOIN servers ON servers.id = server_koths.server_id
          JOIN arena_data ON arena_data.id = server_koths.arena_id
-WHERE servers.name = get_14_newest_network_koths.server_name
+WHERE servers.name = get_14_newest_server_koths.server_name
 ORDER BY end_timestamp IS NULL, end_timestamp
 LIMIT 14
 $$
