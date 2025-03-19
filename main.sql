@@ -404,7 +404,7 @@ SELECT death_ban_minutes,
        off_peak_lives_needed_as_cents,
        bard_radius,
        rogue_radius,
-       timestamp,
+       "timestamp",
        servers.name,
        attack_speeds.name
 FROM server_data
