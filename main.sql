@@ -22,6 +22,22 @@ INSERT INTO user_referrals (user_uuid, referrer)
 VALUES (insert_user_referral.user_uuid, insert_user_referral.referrer)
 ON CONFLICT DO NOTHING
 $$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_12_newest_players()
+    RETURNS TABLE
+            (
+                user_uuid  UUID,
+                referrer   TEXT,
+                timestamp  TIMESTAMPTZ,
+                row_number INTEGER
+            )
+AS
+$$
+SELECT user_uuid, referrer, timestamp, ROW_NUMBER() OVER (ORDER BY timestamp) AS row_number
+FROM user_referrals
+ORDER BY timestamp
+LIMIT 12
+$$
+    LANGUAGE sql;
 
 DROP TABLE chat_ranks;
 CREATE TABLE chat_ranks
@@ -65,6 +81,22 @@ VALUES (0, 'hcf', 'life', 400,
        (7, 'mz', 'gold', 1200, 'yellow name, gold server slot', false),
        (8, 'mz', 'diamond', 1800, 'aqua name, diamond server slot', false),
        (9, 'mz', 'ruby', 2400, 'red name, ruby server slot', false);
+CREATE OR REPLACE FUNCTION get_line_items()
+    RETURNS TABLE
+            (
+                game_mode_name TEXT,
+                line_item_name TEXT,
+                value_in_cents INTEGER,
+                description    TEXT,
+                is_plural      BOOLEAN
+            )
+AS
+$$
+SELECT game_mode_name, line_item_name, value_in_cents, description, is_plural
+FROM line_items
+ORDER BY id
+$$
+    LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS successful_transactions
 (
@@ -106,6 +138,34 @@ INSERT INTO successful_transactions (user_uuid, line_item_id, line_item_player_n
 VALUES (insert_user_hcf_life.user_uuid, '0', user_name, amount, 0)
 $$
     LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_unsuccessful_transactions(order_ids TEXT[])
+    RETURNS TABLE
+            (
+                order_id TEXT
+            )
+AS
+$$
+SELECT order_id
+FROM unnest(order_ids) AS order_id
+WHERE order_id NOT IN (SELECT square_order_id
+                       FROM successful_transactions)
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE insert_successful_transaction(order_id TEXT, user_uuid UUID, line_item_name TEXT,
+                                                          line_item_player_name TEXT,
+                                                          line_item_quantity INTEGER, amount_as_cents INTEGER)
+AS
+$$
+INSERT INTO successful_transactions (square_order_id, user_uuid, line_item_id, line_item_player_name,
+                                     line_item_quantity,
+                                     amount_as_cents, referrer)
+VALUES (order_id, insert_successful_transaction.user_uuid,
+        (SELECT id FROM line_items WHERE line_items.line_item_name = insert_successful_transaction.line_item_name),
+        insert_successful_transaction.line_item_player_name,
+        insert_successful_transaction.line_item_quantity, insert_successful_transaction.amount_as_cents,
+        (SELECT referrer FROM user_referrals WHERE user_referrals.user_uuid = insert_successful_transaction.user_uuid))
+$$
+    LANGUAGE sql;
 
 --TODO -> users id table (?)
 
@@ -143,11 +203,25 @@ CREATE TABLE IF NOT EXISTS servers
 
 CREATE TABLE IF NOT EXISTS online_players
 (
-    user_uuid UUID PRIMARY KEY,
-    user_name TEXT    NOT NULL,
-    server_id INTEGER NOT NULL,
+    user_uuid    UUID PRIMARY KEY,
+    user_name    TEXT    NOT NULL,
+    server_id    INTEGER NOT NULL,
+    faction_uuid UUID, -- TODO
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
+CREATE OR REPLACE FUNCTION get_online_players()
+    RETURNS TABLE
+            (
+                user_name TEXT,
+                name      TEXT
+            )
+AS
+$$
+SELECT user_name, name
+FROM online_players
+         JOIN servers ON server_id = servers.id
+$$
+    LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS server_data
 (
@@ -289,6 +363,55 @@ SELECT dtr_max
 FROM server_data
 WHERE server_data.server_id = get_server_max_dtr.server_id
 $$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_server_datas()
+    RETURNS TABLE
+            (
+                death_ban_minutes                 INTEGER,
+                world_border_radius               INTEGER,
+                sharpness_limit                   INTEGER,
+                power_limit                       INTEGER,
+                protection_limit                  INTEGER,
+                bard_regen_level                  INTEGER,
+                bard_strength_level               INTEGER,
+                is_weakness_enabled               BOOLEAN,
+                is_bard_passive_debuffing_enabled BOOLEAN,
+                dtr_freeze_timer                  INTEGER,
+                dtr_max                           REAL,
+                dtr_max_time                      INTEGER,
+                dtr_off_peak_freeze_time          INTEGER,
+                off_peak_lives_needed_as_cents    INTEGER,
+                bard_radius                       INTEGER,
+                rogue_radius                      INTEGER,
+                timestamp                         TIMESTAMPTZ,
+                server_name                       TEXT,
+                attack_speed_name                 TEXT
+            )
+AS
+$$
+SELECT death_ban_minutes,
+       world_border_radius,
+       sharpness_limit,
+       power_limit,
+       protection_limit,
+       bard_regen_level,
+       bard_strength_level,
+       is_weakness_enabled,
+       is_bard_passive_debuffing_enabled,
+       dtr_freeze_timer,
+       dtr_max,
+       dtr_max_time,
+       dtr_off_peak_freeze_time,
+       off_peak_lives_needed_as_cents,
+       bard_radius,
+       rogue_radius,
+       timestamp,
+       servers.name,
+       attack_speeds.name
+FROM server_data
+         JOIN servers ON id = server_id
+         JOIN attack_speeds ON attack_speed_id = attack_speeds.id
+$$
+    LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS player_attack_speeds
 (
@@ -1057,6 +1180,24 @@ FROM current_factions_members
          JOIN factions ON current_factions_members.faction_id = factions.id
 WHERE party_uuid = faction_uuid
 $$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_7_factions(server_name TEXT)
+    RETURNS TABLE
+            (
+                name                       TEXT,
+                party_uuid                 UUID,
+                frozen_until               TIMESTAMPTZ,
+                current_max_dtr            REAL,
+                current_regen_adjusted_dtr REAL
+            )
+AS
+$$
+SELECT factions.name, party_uuid, get_dtr_data((SELECT id FROM servers WHERE name = server_name), party_uuid)
+FROM factions
+         JOIN servers ON factions.server_id = servers.id
+WHERE servers.name = server_name
+LIMIT 7
+$$
+    LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS faction_data
 (
@@ -1391,6 +1532,83 @@ CREATE TABLE IF NOT EXISTS user_deaths
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     FOREIGN KEY (victim_user_fight_id) REFERENCES user_fights (id) ON DELETE CASCADE
 );
+CREATE OR REPLACE FUNCTION get_12_latest_network_deaths()
+    RETURNS TABLE
+            (
+                name                    TEXT,
+                victim_user_fight_id    INTEGER,
+                timestamp               TIMESTAMPTZ,
+                victim_uuid             UUID,
+                bukkit_victim_inventory BYTEA,
+                death_world             TEXT,
+                death_x                 INTEGER,
+                death_y                 INTEGER,
+                death_z                 INTEGER,
+                death_message           TEXT,
+                killer_uuid             UUID,
+                bukkit_kill_weapon      BYTEA,
+                bukkit_killer_inventory BYTEA
+            )
+AS
+$$
+SELECT name,
+       victim_user_fight_id,
+       user_deaths.timestamp,
+       victim_uuid,
+       bukkit_victim_inventory,
+       death_world,
+       death_x,
+       death_y,
+       death_z,
+       death_message,
+       killer_uuid,
+       bukkit_kill_weapon,
+       bukkit_killer_inventory
+FROM user_deaths
+         JOIN servers ON user_deaths.server_id = servers.id
+ORDER BY timestamp DESC
+LIMIT 12
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_12_latest_server_deaths(server_name TEXT)
+    RETURNS TABLE
+            (
+                name                    TEXT,
+                victim_user_fight_id    INTEGER,
+                timestamp               TIMESTAMPTZ,
+                victim_uuid             UUID,
+                bukkit_victim_inventory BYTEA,
+                death_world             TEXT,
+                death_x                 INTEGER,
+                death_y                 INTEGER,
+                death_z                 INTEGER,
+                death_message           TEXT,
+                killer_uuid             UUID,
+                bukkit_kill_weapon      BYTEA,
+                bukkit_killer_inventory BYTEA
+            )
+AS
+$$
+SELECT name,
+       victim_user_fight_id,
+       user_deaths.timestamp,
+       victim_uuid,
+       bukkit_victim_inventory,
+       death_world,
+       death_x,
+       death_y,
+       death_z,
+       death_message,
+       killer_uuid,
+       bukkit_kill_weapon,
+       bukkit_killer_inventory
+FROM user_deaths
+         JOIN servers ON user_deaths.server_id = servers.id
+WHERE name = server_name
+ORDER BY timestamp DESC
+LIMIT 12
+$$
+    LANGUAGE sql;
 CREATE OR REPLACE FUNCTION insert_user_death_return_id(
     server_id INTEGER,
     victim_user_fight_id INTEGER,
@@ -1456,6 +1674,30 @@ CREATE TABLE IF NOT EXISTS bandits
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     FOREIGN KEY (death_id) REFERENCES user_deaths (id) ON DELETE CASCADE
 );
+CREATE OR REPLACE FUNCTION get_7_newest_bandits(server_name TEXT)
+    RETURNS TABLE
+            (
+                user_uuid            UUID,
+                death_id             INTEGER,
+                timestamp            TIMESTAMPTZ,
+                expiration_timestamp TIMESTAMPTZ,
+                bandit_message       TEXT
+            )
+AS
+$$
+SELECT user_uuid,
+       death_id,
+       user_deaths.timestamp,
+       expiration_timestamp,
+       bandit_message
+FROM bandits
+         JOIN user_deaths on bandits.death_id = user_deaths.id
+         JOIN servers ON user_deaths.server_id = servers.id
+WHERE name = server_name
+ORDER BY user_deaths.timestamp DESC
+LIMIT 7
+$$
+    LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS current_bandits
 (
     bandit_id INTEGER PRIMARY KEY,
@@ -1480,7 +1722,7 @@ SELECT EXISTS(SELECT expiration_timestamp
 $$
     LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE insert_bandit(bandit_uuid UUID, server_id INTEGER, death_id INTEGER, expiration TIMESTAMPTZ,
-                                bandit_message TEXT, ip TEXT)
+                                          bandit_message TEXT, ip TEXT)
 AS
 $$
 WITH cte
@@ -1924,6 +2166,103 @@ AS
 $$
 SELECT EXISTS (SELECT * FROM koths WHERE server_id = get_is_koth_active.server_id AND end_timestamp IS NULL)
 $$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_14_newest_network_koths()
+    RETURNS TABLE
+            (
+                row_number             INTEGER,
+                server_koths_id        INTEGER,
+                start_timestamp        TIMESTAMPTZ,
+                loot_factor            INTEGER,
+                max_timer              INTEGER,
+                is_movement_restricted BOOLEAN,
+                capping_user_uuid      UUID,
+                end_timestamp          TIMESTAMPTZ,
+                capping_party_uuid     UUID,
+                world                  TEXT,
+                x                      INTEGER,
+                y                      INTEGER,
+                z                      INTEGER,
+                server_name            TEXT,
+                arena_name             TEXT,
+                creator                TEXT
+
+            )
+AS
+$$
+SELECT ROW_NUMBER() OVER (ORDER BY timestamp)                         AS row_number,
+
+       server_koths_id,
+       start_timestamp,
+       loot_factor,
+       max_timer,
+       is_movement_restricted,
+       CASE WHEN end_timestamp IS NOT NULL THEN capping_user_uuid END AS capping_user_uuid,
+       end_timestamp,
+       capping_party_uuid,
+       world,
+       x,
+       y,
+       z,
+       servers.name                                                   AS server_name,
+       arena_data.name                                                AS arena_name,
+       creator
+FROM koths
+         JOIN server_koths ON server_koths_id = server_koths.id
+         JOIN servers ON servers.id = server_koths.server_id
+         JOIN arena_data ON arena_data.id = server_koths.arena_id
+ORDER BY end_timestamp IS NULL, end_timestamp
+LIMIT 14
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_14_newest_server_koths(server_name TEXT)
+    RETURNS TABLE
+            (
+                row_number             INTEGER,
+                server_koths_id        INTEGER,
+                start_timestamp        TIMESTAMPTZ,
+                loot_factor            INTEGER,
+                max_timer              INTEGER,
+                is_movement_restricted BOOLEAN,
+                capping_user_uuid      UUID,
+                end_timestamp          TIMESTAMPTZ,
+                capping_party_uuid     UUID,
+                world                  TEXT,
+                x                      INTEGER,
+                y                      INTEGER,
+                z                      INTEGER,
+                server_name            TEXT,
+                arena_name             TEXT,
+                creator                TEXT
+
+            )
+AS
+$$
+SELECT ROW_NUMBER() OVER (ORDER BY timestamp)                         AS row_number,
+
+       server_koths_id,
+       start_timestamp,
+       loot_factor,
+       max_timer,
+       is_movement_restricted,
+       CASE WHEN end_timestamp IS NOT NULL THEN capping_user_uuid END AS capping_user_uuid,
+       end_timestamp,
+       capping_party_uuid,
+       world,
+       x,
+       y,
+       z,
+       servers.name                                                   AS server_name,
+       arena_data.name                                                AS arena_name,
+       creator
+FROM koths
+         JOIN server_koths ON server_koths_id = server_koths.id
+         JOIN servers ON servers.id = server_koths.server_id
+         JOIN arena_data ON arena_data.id = server_koths.arena_id
+WHERE servers.name = get_14_newest_network_koths.server_name
+ORDER BY end_timestamp IS NULL, end_timestamp
+LIMIT 14
+$$
+    LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS user_zombies_killed
 (
