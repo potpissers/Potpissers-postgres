@@ -22,7 +22,7 @@ INSERT INTO user_referrals (user_uuid, referrer)
 VALUES (insert_user_referral.user_uuid, insert_user_referral.referrer)
 ON CONFLICT DO NOTHING
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_12_newest_players()
+CREATE OR REPLACE FUNCTION get_10_newest_players()
     RETURNS TABLE
             (
                 user_uuid  UUID,
@@ -35,7 +35,7 @@ $$
 SELECT user_uuid, referrer, timestamp, ROW_NUMBER() OVER (ORDER BY timestamp) AS row_number
 FROM user_referrals
 ORDER BY timestamp
-LIMIT 12
+LIMIT 10
 $$
     LANGUAGE sql;
 
