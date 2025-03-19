@@ -1194,7 +1194,7 @@ $$
 SELECT factions.name, party_uuid, frozen_until, current_max_dtr, current_regen_adjusted_dtr
 FROM factions
          JOIN servers ON factions.server_id = servers.id
-         JOIN LATERAL get_dtr_data((SELECT id FROM servers WHERE name = server_name), party_uuid) ON TRUE
+         JOIN LATERAL get_dtr_data(servers.id, party_uuid) ON TRUE
 WHERE servers.name = server_name
 LIMIT 7
 $$
