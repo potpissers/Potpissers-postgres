@@ -1191,9 +1191,10 @@ CREATE OR REPLACE FUNCTION get_7_factions(server_name TEXT)
             )
 AS
 $$
-SELECT factions.name, party_uuid, get_dtr_data((SELECT id FROM servers WHERE name = server_name), party_uuid)
+SELECT factions.name, party_uuid, frozen_until, current_max_dtr, current_regen_adjusted_dtr
 FROM factions
          JOIN servers ON factions.server_id = servers.id
+         JOIN LATERAL get_dtr_data((SELECT id FROM servers WHERE name = server_name), party_uuid) lateral ON TRUE
 WHERE servers.name = server_name
 LIMIT 7
 $$
@@ -1537,7 +1538,7 @@ CREATE OR REPLACE FUNCTION get_12_latest_network_deaths()
             (
                 name                    TEXT,
                 victim_user_fight_id    INTEGER,
-                "timestamp"               TIMESTAMPTZ,
+                "timestamp"             TIMESTAMPTZ,
                 victim_uuid             UUID,
                 bukkit_victim_inventory BYTEA,
                 death_world             TEXT,
@@ -1575,7 +1576,7 @@ CREATE OR REPLACE FUNCTION get_12_latest_server_deaths(server_name TEXT)
             (
                 name                    TEXT,
                 victim_user_fight_id    INTEGER,
-                "timestamp"               TIMESTAMPTZ,
+                "timestamp"             TIMESTAMPTZ,
                 victim_uuid             UUID,
                 bukkit_victim_inventory BYTEA,
                 death_world             TEXT,
@@ -1679,7 +1680,7 @@ CREATE OR REPLACE FUNCTION get_7_newest_bandits(server_name TEXT)
             (
                 user_uuid            UUID,
                 death_id             INTEGER,
-                "timestamp"            TIMESTAMPTZ,
+                "timestamp"          TIMESTAMPTZ,
                 expiration_timestamp TIMESTAMPTZ,
                 bandit_message       TEXT
             )
