@@ -398,7 +398,7 @@ SELECT death_ban_minutes,
        is_weakness_enabled,
        is_bard_passive_debuffing_enabled,
        dtr_freeze_timer,
-       dtr_max,
+       dtr_max, --
        dtr_max_time,
        dtr_off_peak_freeze_time,
        off_peak_lives_needed_as_cents,
