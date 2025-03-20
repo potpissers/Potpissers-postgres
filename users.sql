@@ -1,5 +1,5 @@
 DROP TABLE chat_types;
-CREATE TABLE chat_types
+CREATE UNLOGGED TABLE chat_types
 (
     id   INTEGER PRIMARY KEY,
     name TEXT NOT NULL

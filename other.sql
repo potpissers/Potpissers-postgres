@@ -29,7 +29,7 @@ $$
     LANGUAGE sql;
 
 DROP TABLE server_tips;
-CREATE TABLE server_tips
+CREATE UNLOGGED TABLE server_tips
 (
     game_mode_name TEXT NOT NULL,
     tip_title      TEXT PRIMARY KEY,

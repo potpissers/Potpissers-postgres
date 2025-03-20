@@ -40,7 +40,7 @@ $$
     LANGUAGE sql;
 
 DROP TABLE chat_ranks;
-CREATE TABLE chat_ranks
+CREATE UNLOGGED TABLE chat_ranks
 (
     id   INTEGER PRIMARY KEY,
     name TEXT NOT NULL
@@ -59,7 +59,7 @@ VALUES (0, 'admin'),
        (9, 'big dog');
 
 DROP TABLE line_items;
-CREATE TABLE line_items
+CREATE UNLOGGED TABLE line_items
 (
     id             INTEGER PRIMARY KEY,
     game_mode_name TEXT    NOT NULL,
@@ -170,7 +170,7 @@ $$
 --TODO -> users id table (?)
 
 DROP TABLE attack_speeds;
-CREATE TABLE attack_speeds
+CREATE UNLOGGED TABLE attack_speeds
 (
     id   INTEGER PRIMARY KEY,
     name TEXT NOT NULL
@@ -183,7 +183,7 @@ VALUES (0, 'vanilla'),
        (4, 'uncapped');
 
 DROP TABLE party_ranks;
-CREATE TABLE party_ranks
+CREATE UNLOGGED TABLE party_ranks
 (
     id   INTEGER PRIMARY KEY,
     name TEXT NOT NULL
@@ -728,7 +728,7 @@ ON CONFLICT (user_uuid, server_id) DO UPDATE SET chat_rank_id = EXCLUDED.chat_ra
 $$ LANGUAGE sql;
 
 DROP TABLE punishment_types;
-CREATE TABLE IF NOT EXISTS punishment_types
+CREATE UNLOGGED TABLE IF NOT EXISTS punishment_types
 (
     id   INTEGER PRIMARY KEY,
     name TEXT NOT NULL
