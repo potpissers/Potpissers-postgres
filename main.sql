@@ -22,6 +22,21 @@ INSERT INTO user_referrals (user_uuid, referrer)
 VALUES (insert_user_referral.user_uuid, insert_user_referral.referrer)
 ON CONFLICT DO NOTHING
 $$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE handle_upsert_user_referral(user_uuid UUID, "timestamp" TIMESTAMPTZ, player_name TEXT)
+AS
+$$
+WITH cte AS (INSERT INTO user_referrals (user_uuid, timestamp)
+    VALUES (handle_upsert_user_referral.user_uuid, handle_upsert_user_referral.timestamp)
+    ON CONFLICT (user_uuid) DO UPDATE SET timestamp = EXCLUDED.timestamp RETURNING *)
+SELECT pg_notify('referrals',
+                 (SELECT json_build_object('player_uuid', cte.user_uuid, 'referrer', cte.referrer, 'timestamp',
+                                           cte.timestamp, 'row_number',
+                                           (SELECT ROW_NUMBER() over (ORDER BY user_referrals.timestamp)
+                                            FROM user_referrals
+                                            WHERE user_referrals.user_uuid = handle_upsert_user_referral.user_uuid),
+                                           'player_name', handle_upsert_user_referral.player_name)
+                  FROM cte))
+$$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_10_newest_players()
     RETURNS TABLE
             (
@@ -205,11 +220,11 @@ DROP TABLE online_players;
 CREATE UNLOGGED TABLE online_players
 (
     user_uuid    UUID PRIMARY KEY,
-    user_name    TEXT    NOT NULL,
-    server_id    INTEGER NOT NULL,
+    user_name    TEXT NOT NULL,
+    server_name  TEXT NOT NULL,
     faction_uuid UUID, -- TODO,
-    timestamp    TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
+    network_join TIMESTAMPTZ DEFAULT NOW(),
+    server_join  TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE OR REPLACE FUNCTION get_online_players()
     RETURNS TABLE
@@ -218,13 +233,62 @@ CREATE OR REPLACE FUNCTION get_online_players()
                 user_name    TEXT,
                 server_name  TEXT,
                 faction_uuid UUID,
-                "timestamp"    TIMESTAMPTZ
+                network_join TIMESTAMPTZ,
+                server_join  TIMESTAMPTZ
             )
 AS
 $$
-SELECT user_uuid, user_name, servers.name, faction_uuid, online_players.timestamp
+SELECT user_uuid, user_name, servers.name, faction_uuid, network_join, server_join
 FROM online_players
          JOIN servers ON server_id = servers.id
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE handle_upsert_online_player(user_uuid UUID, user_name TEXT, server_name TEXT, faction_uuid UUID)
+AS
+$$
+WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_players.user_uuid, 'name',
+                                                                 online_players.user_name, 'server_name',
+                                                                 online_players.server_name,
+                                                                 'active_faction', online_players.faction_uuid,
+                                                                 'network_join', network_join, 'server_join',
+                                                                 server_join)
+                                        FROM online_players
+                                        WHERE online_players.user_uuid = handle_upsert_online_player.user_uuid))
+           WHERE EXISTS(SELECT * FROM online_players WHERE online_players.user_uuid = ?)),
+     cte AS (INSERT
+         INTO online_players (user_uuid, user_name, server_name, faction_uuid)
+             VALUES (handle_upsert_online_player.user_uuid, handle_upsert_online_player.user_name,
+                     handle_upsert_online_player.server_name, handle_upsert_online_player.faction_uuid)
+             ON CONFLICT (user_uuid) DO UPDATE SET user_name = EXCLUDED.user_name,
+                 server_name = EXCLUDED.server_name,
+                 faction_uuid = EXCLUDED.faction_uuid,
+                 server_join = NOW() RETURNING *)
+SELECT pg_notify('online', (SELECT json_build_object('uuid', cte.user_uuid,
+                                                     'name', cte.user_name, 'server_name',
+                                                     cte.server_name,
+                                                     'active_faction',
+                                                     cte.faction_uuid,
+                                                     'network_join',
+                                                     cte.network_join,
+                                                     'server_join',
+                                                     cte.server_join)
+                            FROM cte))
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE handle_delete_online_player(user_uuid UUID)
+AS
+$$
+WITH cte AS (DELETE
+    FROM online_players
+        WHERE online_players.user_uuid = handle_delete_online_player.user_uuid
+        RETURNING *)
+SELECT pg_notify('offline', (SELECT json_build_object('uuid', cte.user_uuid, 'name',
+                                                      user_name, 'server_name',
+                                                      server_name,
+                                                      'active_faction', faction_uuid,
+                                                      'network_join', network_join, 'server_join',
+                                                      server_join)
+                             FROM cte))
 $$
     LANGUAGE sql;
 
