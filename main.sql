@@ -254,7 +254,9 @@ WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_
                                                                  server_join)::TEXT
                                         FROM online_players
                                         WHERE online_players.user_uuid = handle_upsert_online_player.user_uuid))
-           WHERE EXISTS(SELECT * FROM online_players WHERE online_players.user_uuid = handle_upsert_online_player.user_uuid)),
+           WHERE EXISTS(SELECT *
+                        FROM online_players
+                        WHERE online_players.user_uuid = handle_upsert_online_player.user_uuid)),
      cte AS (INSERT
          INTO online_players (user_uuid, user_name, server_name, faction_uuid)
              VALUES (handle_upsert_online_player.user_uuid, handle_upsert_online_player.user_name,
@@ -1868,7 +1870,7 @@ BEGIN
            handle_insert_deathban_return_duration_data_if_inserted.ip
     WHERE death_ban_seconds > 0;
 
-    SELECT death_ban_seconds, deathban_expiration;
+    RETURN QUERY SELECT death_ban_seconds, deathban_expiration;
 END
 $$
     LANGUAGE plpgsql;
