@@ -263,7 +263,7 @@ WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_
                  server_name = EXCLUDED.server_name,
                  faction_uuid = EXCLUDED.faction_uuid,
                  server_join = NOW() RETURNING *)
-SELECT * FROM pg_notify('online', (SELECT json_build_object('uuid', cte.user_uuid,
+SELECT pg_notify('online', (SELECT json_build_object('uuid', cte.user_uuid,
                                                      'name', cte.user_name, 'server_name',
                                                      cte.server_name,
                                                      'active_faction',
