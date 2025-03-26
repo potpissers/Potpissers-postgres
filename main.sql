@@ -1839,11 +1839,11 @@ CREATE TABLE IF NOT EXISTS current_deathbans
 CREATE OR REPLACE FUNCTION handle_insert_deathban_return_duration_data_if_inserted(server_id INTEGER,
                                                                                    user_seconds_played INTEGER,
                                                                                    death_id INTEGER, ip TEXT)
-    RETURNS TABLE
-            (
-                death_ban_seconds   INTEGER,
-                deathban_expiration TIMESTAMPTZ
-            )
+--     RETURNS TABLE
+--             (
+--                 death_ban_seconds   INTEGER,
+--                 deathban_expiration TIMESTAMPTZ
+--             )
 AS
 $$
 DECLARE
@@ -1858,7 +1858,7 @@ BEGIN
 
     INSERT INTO deathbans (death_id, expiration)
     SELECT handle_insert_deathban_return_duration_data_if_inserted.death_id,
-           NOW() + death_ban_seconds -- TODO ? this doesn't work in sql, it MIGHT work in plpgsql ?
+           NOW() + death_ban_seconds * INTERVAL '1 second'
     WHERE death_ban_seconds > 0
     RETURNING expiration INTO deathban_expiration;
 
