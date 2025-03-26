@@ -25,10 +25,10 @@ $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_10_newest_players()
     RETURNS TABLE
             (
-                user_uuid  UUID,
-                referrer   TEXT,
-                "timestamp"  TIMESTAMPTZ,
-                row_number INTEGER
+                user_uuid   UUID,
+                referrer    TEXT,
+                "timestamp" TIMESTAMPTZ,
+                row_number  INTEGER
             )
 AS
 $$
@@ -207,18 +207,22 @@ CREATE UNLOGGED TABLE online_players
     user_uuid    UUID PRIMARY KEY,
     user_name    TEXT    NOT NULL,
     server_id    INTEGER NOT NULL,
-    faction_uuid UUID, -- TODO
+    faction_uuid UUID, -- TODO,
+    timestamp    TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
 CREATE OR REPLACE FUNCTION get_online_players()
     RETURNS TABLE
             (
-                user_name TEXT,
-                name      TEXT
+                user_uuid    UUID,
+                user_name    TEXT,
+                server_name  TEXT,
+                faction_uuid UUID,
+                timestamp    TIMESTAMPTZ
             )
 AS
 $$
-SELECT user_name, name
+SELECT user_uuid, user_name, servers.name, faction_uuid, online_players.timestamp
 FROM online_players
          JOIN servers ON server_id = servers.id
 $$
@@ -383,7 +387,7 @@ CREATE OR REPLACE FUNCTION get_server_datas()
                 off_peak_lives_needed_as_cents    INTEGER,
                 bard_radius                       INTEGER,
                 rogue_radius                      INTEGER,
-                "timestamp"                         TIMESTAMPTZ,
+                "timestamp"                       TIMESTAMPTZ,
                 server_name                       TEXT,
                 attack_speed_name                 TEXT
             )
