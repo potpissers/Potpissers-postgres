@@ -1839,11 +1839,11 @@ CREATE TABLE IF NOT EXISTS current_deathbans
 CREATE OR REPLACE FUNCTION handle_insert_deathban_return_duration_data_if_inserted(server_id INTEGER,
                                                                                    user_seconds_played INTEGER,
                                                                                    death_id INTEGER, ip TEXT)
---     RETURNS TABLE
---             (
---                 death_ban_seconds   INTEGER,
---                 deathban_expiration TIMESTAMPTZ
---             )
+    RETURNS TABLE
+            (
+                death_ban_seconds   INTEGER,
+                deathban_expiration TIMESTAMPTZ
+            )
 AS
 $$
 DECLARE
