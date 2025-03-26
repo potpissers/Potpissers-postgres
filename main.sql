@@ -34,7 +34,7 @@ SELECT pg_notify('referrals',
                                            (SELECT ROW_NUMBER() over (ORDER BY user_referrals.timestamp)
                                             FROM user_referrals
                                             WHERE user_referrals.user_uuid = handle_upsert_user_referral.user_uuid),
-                                           'player_name', handle_upsert_user_referral.player_name)
+                                           'player_name', handle_upsert_user_referral.player_name)::TEXT
                   FROM cte))
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_10_newest_players()
@@ -240,7 +240,7 @@ AS
 $$
 SELECT user_uuid, user_name, servers.name, faction_uuid, network_join, server_join
 FROM online_players
-         JOIN servers ON server_id = servers.id
+         JOIN servers ON server_name = name
 $$
     LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE handle_upsert_online_player(user_uuid UUID, user_name TEXT, server_name TEXT, faction_uuid UUID)
@@ -251,7 +251,7 @@ WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_
                                                                  online_players.server_name,
                                                                  'active_faction', online_players.faction_uuid,
                                                                  'network_join', network_join, 'server_join',
-                                                                 server_join)
+                                                                 server_join)::TEXT
                                         FROM online_players
                                         WHERE online_players.user_uuid = handle_upsert_online_player.user_uuid))
            WHERE EXISTS(SELECT * FROM online_players WHERE online_players.user_uuid = ?)),
@@ -263,7 +263,7 @@ WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_
                  server_name = EXCLUDED.server_name,
                  faction_uuid = EXCLUDED.faction_uuid,
                  server_join = NOW() RETURNING *)
-SELECT pg_notify('online', (SELECT json_build_object('uuid', cte.user_uuid,
+SELECT * FROM pg_notify('online', (SELECT json_build_object('uuid', cte.user_uuid,
                                                      'name', cte.user_name, 'server_name',
                                                      cte.server_name,
                                                      'active_faction',
@@ -271,7 +271,7 @@ SELECT pg_notify('online', (SELECT json_build_object('uuid', cte.user_uuid,
                                                      'network_join',
                                                      cte.network_join,
                                                      'server_join',
-                                                     cte.server_join)
+                                                     cte.server_join)::TEXT
                             FROM cte))
 $$
     LANGUAGE sql;
@@ -287,7 +287,7 @@ SELECT pg_notify('offline', (SELECT json_build_object('uuid', cte.user_uuid, 'na
                                                       server_name,
                                                       'active_faction', faction_uuid,
                                                       'network_join', network_join, 'server_join',
-                                                      server_join)
+                                                      server_join)::TEXT
                              FROM cte))
 $$
     LANGUAGE sql;
