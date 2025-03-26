@@ -218,7 +218,7 @@ CREATE OR REPLACE FUNCTION get_online_players()
                 user_name    TEXT,
                 server_name  TEXT,
                 faction_uuid UUID,
-                timestamp    TIMESTAMPTZ
+                "timestamp"    TIMESTAMPTZ
             )
 AS
 $$
