@@ -1751,7 +1751,7 @@ CREATE OR REPLACE FUNCTION get_7_newest_bandits(server_name TEXT)
             (
                 user_uuid            UUID,
                 death_id             INTEGER,
-                "timestamp"          TIMESTAMPTZ,
+                death_timestamp      TIMESTAMPTZ,
                 expiration_timestamp TIMESTAMPTZ,
                 bandit_message       TEXT
             )
@@ -1793,19 +1793,27 @@ SELECT EXISTS(SELECT expiration_timestamp
                      (current_bandits.ip = user_ip AND NOT (SELECT is_ip_exempt FROM cte))))
 $$
     LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE insert_bandit(bandit_uuid UUID, server_id INTEGER, death_id INTEGER, expiration TIMESTAMPTZ,
-                                          bandit_message TEXT, ip TEXT)
+CREATE OR REPLACE PROCEDURE handle_insert_bandit(bandit_uuid UUID, server_id INTEGER, death_id INTEGER,
+                                                 expiration TIMESTAMPTZ,
+                                                 bandit_message TEXT, ip TEXT)
 AS
 $$
 WITH cte
          AS (INSERT INTO bandits (user_uuid, server_id, death_id, expiration_timestamp, bandit_message) VALUES (bandit_uuid,
-                                                                                                                insert_bandit.server_id,
-                                                                                                                insert_bandit.death_id,
+                                                                                                                handle_insert_bandit.server_id,
+                                                                                                                handle_insert_bandit.death_id,
                                                                                                                 expiration,
-                                                                                                                insert_bandit.bandit_message) RETURNING id)
+                                                                                                                handle_insert_bandit.bandit_message) RETURNING *),
+     _ AS (SELECT pg_notify('bandits',
+                            (SELECT json_build_object('user_uuid', bandit_uuid, 'death_id', death_id, 'death_timestamp',
+                                                      user_deaths.timestamp,
+                                                      'expiration_timestamp', expiration, 'death_message',
+                                                      death_message, 'death_world', death_world, 'death_x',
+                                                      death_x, 'death_y', death_y, 'death_z', death_z)::TEXT
+                             FROM user_deaths)))
 INSERT
 INTO current_bandits (bandit_id, ip)
-VALUES ((SELECT id FROM cte), insert_bandit.ip)
+VALUES ((SELECT id FROM cte), handle_insert_bandit.ip)
 $$
     LANGUAGE sql;
 
