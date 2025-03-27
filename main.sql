@@ -1807,9 +1807,8 @@ WITH cte
      _ AS (SELECT pg_notify('bandits',
                             (SELECT json_build_object('user_uuid', bandit_uuid, 'death_id', death_id, 'death_timestamp',
                                                       user_deaths.timestamp,
-                                                      'expiration_timestamp', expiration, 'death_message',
-                                                      death_message, 'death_world', death_world, 'death_x',
-                                                      death_x, 'death_y', death_y, 'death_z', death_z)::TEXT
+                                                      'expiration_timestamp', expiration, 'bandit_message',
+                                                      bandit_message)::TEXT
                              FROM user_deaths)))
 INSERT
 INTO current_bandits (bandit_id, ip)
