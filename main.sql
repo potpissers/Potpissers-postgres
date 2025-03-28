@@ -1117,12 +1117,13 @@ CREATE TABLE IF NOT EXISTS factions
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_faction_per_name ON factions (name, server_id) WHERE is_disbanded = FALSE;
-CREATE OR REPLACE FUNCTION get_faction_name(party_uuid UUID)
+CREATE OR REPLACE FUNCTION get_faction_name(party_uuid UUID, server_id INTEGER)
     RETURNS TEXT AS
 $$
 SELECT name
 FROM factions
 WHERE factions.party_uuid = get_faction_name.party_uuid
+  AND factions.server_id = get_faction_name.server_id
 $$ LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS faction_timestamps
 (
@@ -1157,7 +1158,7 @@ EXCEPTION
     WHEN OTHERS THEN RETURN FALSE;
 END;
 $$ LANGUAGE plpgsql;
-CREATE OR REPLACE FUNCTION get_user_faction_uuid(user_uuid UUID)
+CREATE OR REPLACE FUNCTION get_user_faction_uuid(user_uuid UUID, server_id INTEGER)
     RETURNS UUID
 AS
 $$
@@ -1165,6 +1166,7 @@ SELECT party_uuid
 FROM current_factions_members
          JOIN factions ON current_factions_members.faction_id = factions.id
 WHERE current_factions_members.user_uuid = get_user_faction_uuid.user_uuid
+  AND factions.server_id = get_user_faction_uuid.server_id
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS current_factions_members
