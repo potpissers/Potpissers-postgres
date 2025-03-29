@@ -1332,6 +1332,7 @@ $$
 DECLARE
     fac_id           INTEGER;
     dtr_freeze_timer INTEGER;
+
 BEGIN
     SELECT id FROM factions WHERE party_uuid = faction_uuid INTO fac_id;
 
@@ -1348,11 +1349,11 @@ BEGIN
     INTO faction_current_dtr_regen_players (faction_id, user_uuid)
     VALUES (fac_id, UNNEST(new_dtr_regen_players));
 
-    UPDATE faction_data
-    SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
-        frozen_until        = NOW() + dtr_freeze_timer * INTERVAL '1 second'
-    WHERE faction_data.faction_id = fac_id
-    RETURNING faction_data.current_minimum_dtr, faction_data.frozen_until, dtr_freeze_timer;
+    RETURN QUERY UPDATE faction_data
+        SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
+            frozen_until = NOW() + dtr_freeze_timer * INTERVAL '1 second'
+        WHERE faction_data.faction_id = fac_id
+        RETURNING faction_data.current_minimum_dtr, faction_data.frozen_until, dtr_freeze_timer;
 END;
 $$
     LANGUAGE plpgsql;
