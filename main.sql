@@ -1214,10 +1214,13 @@ $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE delete_user_current_faction(user_uuid UUID, faction_uuid UUID)
 AS
 $$
+WITH cte as (DELETE FROM faction_current_dtr_regen_players WHERE faction_current_dtr_regen_players.user_uuid = delete_user_current_faction.user_uuid AND
+                                                                 faction_id =
+                                                                 (SELECT id FROM factions WHERE party_uuid = faction_uuid) RETURNING faction_id)
 DELETE
 FROM current_factions_members
 WHERE current_factions_members.user_uuid = delete_user_current_faction.user_uuid
-  AND faction_id = (SELECT id FROM factions WHERE party_uuid = faction_uuid)
+  AND faction_id = (SELECT faction_id FROM cte)
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE upsert_user_current_faction(user_uuid UUID, faction_uuid UUID, rank_name TEXT)
 AS
@@ -1321,7 +1324,8 @@ FROM faction_data
          JOIN factions ON factions.id = faction_data.faction_id
 WHERE factions.party_uuid = get_faction_data.party_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(faction_uuid UUID, server_id INTEGER, new_dtr_regen_players UUID[], dtr_amount REAL)
+CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(faction_uuid UUID, server_id INTEGER,
+                                                          new_dtr_regen_players UUID[], dtr_amount REAL)
     RETURNS TABLE
             (
                 current_minimum_dtr REAL,
@@ -1350,7 +1354,9 @@ BEGIN
     VALUES (fac_id, UNNEST(new_dtr_regen_players));
 
     RETURN QUERY UPDATE faction_data
-        SET current_minimum_dtr = GREATEST(get_dtr(server_id, faction_uuid) - dtr_amount, -get_faction_max_dtr(handle_dtr_death_return_result.server_id, faction_uuid)), -- TODO -> this is so wasteful
+        SET current_minimum_dtr = GREATEST(get_dtr(server_id, faction_uuid) - dtr_amount,
+                                           -get_faction_max_dtr(handle_dtr_death_return_result.server_id,
+                                                                faction_uuid)), -- TODO -> this is so wasteful
             frozen_until = NOW() + dtr_freeze_timer * INTERVAL '1 second'
         WHERE faction_data.faction_id = fac_id
         RETURNING faction_data.current_minimum_dtr, faction_data.frozen_until, dtr_freeze_timer;
