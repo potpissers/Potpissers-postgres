@@ -1342,7 +1342,7 @@ WITH cte AS (SELECT dtr_freeze_timer
      _ as (
          DELETE
              FROM faction_current_dtr_regen_players
-                 WHERE faction_id = (SELECT faction_id FROM bar))
+                 WHERE faction_id IN (SELECT faction_id FROM bar))
 INSERT
 INTO faction_current_dtr_regen_players (faction_id, user_uuid)
 SELECT faction_id, UNNEST(new_dtr_regen_players)
