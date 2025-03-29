@@ -1329,27 +1329,33 @@ CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(server_id INTEGER, fac
             )
 AS
 $$
-WITH cte AS (SELECT dtr_freeze_timer
-             FROM server_data
-             WHERE server_data.server_id = handle_dtr_death_return_result.server_id),
-     bar AS (
-         UPDATE faction_data
-             SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
-                 frozen_until = NOW() + (SELECT dtr_freeze_timer * INTERVAL '1 second'
-                                         FROM cte)
-             WHERE faction_id = (SELECT id FROM factions WHERE party_uuid = faction_uuid)
-             RETURNING faction_id, current_minimum_dtr, frozen_until),
-     _ as (
-         DELETE
-             FROM faction_current_dtr_regen_players
-                 WHERE faction_id IN (SELECT faction_id FROM bar))
-INSERT
-INTO faction_current_dtr_regen_players (faction_id, user_uuid)
-SELECT faction_id, UNNEST(new_dtr_regen_players)
-FROM bar
-RETURNING (SELECT current_minimum_dtr FROM bar), (SELECT frozen_until FROM bar), (SELECT dtr_freeze_timer FROM cte);
+DECLARE
+    faction_id INTEGER;
+BEGIN
+    WITH _ AS (SELECT faction_id INTO faction_id FROM factions WHERE party_uuid = faction_uuid)
+    DELETE
+    FROM faction_current_dtr_regen_players
+    WHERE faction_current_dtr_regen_players.faction_id = handle_dtr_death_return_result.faction_id;
+
+    WITH cte AS (SELECT dtr_freeze_timer
+                 FROM server_data
+                 WHERE server_data.server_id = handle_dtr_death_return_result.server_id),
+         bar AS (
+             UPDATE faction_data
+                 SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
+                     frozen_until = NOW() + (SELECT dtr_freeze_timer * INTERVAL '1 second'
+                                             FROM cte)
+                 WHERE faction_data.faction_id = handle_dtr_death_return_result.faction_id
+                 RETURNING faction_id, current_minimum_dtr, frozen_until)
+
+    INSERT
+    INTO faction_current_dtr_regen_players (faction_id, user_uuid)
+    SELECT faction_id, UNNEST(new_dtr_regen_players)
+    FROM bar
+    RETURNING (SELECT current_minimum_dtr FROM bar), (SELECT frozen_until FROM bar), (SELECT dtr_freeze_timer FROM cte);
+END;
 $$
-    LANGUAGE sql;
+    LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION get_dtr_data(server_id INTEGER, party_uuid UUID)
     RETURNS TABLE
             (
