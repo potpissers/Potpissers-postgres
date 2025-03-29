@@ -1321,7 +1321,7 @@ FROM faction_data
 WHERE factions.party_uuid = get_faction_data.party_uuid
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(server_id INTEGER, faction_uuid UUID, new_dtr_regen_players UUID[])
-        RETURNS TABLE
+    RETURNS TABLE
             (
                 current_minimum_dtr REAL,
                 frozen_until        TIMESTAMPTZ,
@@ -1330,7 +1330,8 @@ CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(server_id INTEGER, fac
 AS
 $$
 DECLARE
-    fac_id INTEGER;
+    fac_id           INTEGER;
+    dtr_freeze_timer INTEGER;
 BEGIN
     SELECT id FROM factions WHERE party_uuid = faction_uuid INTO fac_id;
 
@@ -1338,21 +1339,22 @@ BEGIN
     FROM faction_current_dtr_regen_players
     WHERE faction_current_dtr_regen_players.faction_id = fac_id;
 
-    WITH cte AS (SELECT dtr_freeze_timer
-                 FROM server_data
-                 WHERE server_data.server_id = handle_dtr_death_return_result.server_id),
-         bar AS (
-             UPDATE faction_data
-                 SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
-                     frozen_until = NOW() + (SELECT cte.dtr_freeze_timer * INTERVAL '1 second'
-                                             FROM cte)
-                 WHERE faction_data.faction_id = fac_id
-                 RETURNING faction_id, current_minimum_dtr, frozen_until)
+    SELECT dtr_freeze_timer
+    INTO dtr_freeze_timer
+    FROM server_data
+    WHERE server_data.server_id = handle_dtr_death_return_result.server_id;
+
+    WITH bar AS (
+        UPDATE faction_data
+            SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
+                frozen_until = NOW() + dtr_freeze_timer
+            WHERE faction_data.faction_id = fac_id
+            RETURNING faction_id, current_minimum_dtr, frozen_until)
     INSERT
     INTO faction_current_dtr_regen_players (faction_id, user_uuid)
     SELECT faction_id, UNNEST(new_dtr_regen_players)
     FROM bar
-    RETURNING bar.current_minimum_dtr, bar.frozen_until, cte.dtr_freeze_timer;
+    RETURNING bar.current_minimum_dtr, bar.frozen_until, dtr_freeze_timer;
 END;
 $$
     LANGUAGE plpgsql;
