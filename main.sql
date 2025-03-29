@@ -418,6 +418,13 @@ UPDATE server_data
 SET bard_strength_level = update_server_strength_limit.strength_limit
 WHERE server_id = update_server_strength_limit.server_id
 $$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_server_world_border_radius(world_border_radius INTEGER, server_id INTEGER)
+AS
+$$
+UPDATE server_data
+SET world_border_radius = update_server_world_border_radius.world_border_radius
+WHERE server_data.server_id = update_server_world_border_radius.server_id
+$$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_server_is_initially_whitelisted(server_id INTEGER)
     RETURNS BOOLEAN
 AS
@@ -1008,7 +1015,8 @@ CREATE TABLE IF NOT EXISTS current_parties_members
     party_uuid UUID    NOT NULL,
     rank_id    INTEGER NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS one_leader_per_party ON current_parties_members (party_uuid) WHERE rank_id = 4;
+DROP INDEX IF EXISTS one_leader_per_party;
+CREATE UNIQUE INDEX IF NOT EXISTS one_leader_per_party ON current_parties_members (party_uuid) WHERE rank_id = 3;
 -- party_ranks -> leader
 CREATE OR REPLACE FUNCTION get_party_leader_uuid(party_uuid UUID)
     RETURNS UUID
@@ -1098,7 +1106,7 @@ CREATE OR REPLACE PROCEDURE handle_update_party_leader(party_uuid UUID, user_uui
 AS
 $$
 WITH _
-         AS (UPDATE current_parties_members SET rank_id = (SELECT id FROM party_ranks WHERE name = 'co_leader') WHERE
+         AS (UPDATE current_parties_members SET rank_id = (SELECT id FROM party_ranks WHERE name = 'co-leader') WHERE
         rank_id = (SELECT id FROM party_ranks WHERE name = 'leader') AND
         party_uuid = handle_update_party_leader.party_uuid)
 UPDATE current_parties_members
@@ -1223,6 +1231,15 @@ VALUES (upsert_user_current_faction.user_uuid, (SELECT id FROM factions WHERE pa
 ON CONFLICT (user_uuid) DO UPDATE SET rank_id = EXCLUDED.rank_id
 WHERE current_factions_members.faction_id = EXCLUDED.faction_id
 $$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_user_is_in_faction(user_uuid UUID, faction_uuid UUID)
+    RETURNS BOOLEAN AS
+$$
+SELECT EXISTS(SELECT *
+              FROM current_factions_members
+                       JOIN factions ON current_factions_members.faction_id = factions.id
+              WHERE current_factions_members.user_uuid = get_user_is_in_faction.user_uuid
+                AND party_uuid = faction_uuid)
+$$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE handle_faction_disband(faction_uuid UUID)
 AS
 $$
@@ -1235,7 +1252,7 @@ CREATE OR REPLACE PROCEDURE update_current_faction_leader(faction_uuid UUID, lea
 AS
 $$
 WITH cte
-         AS (UPDATE current_factions_members SET rank_id = (SELECT id FROM party_ranks WHERE name = 'co_leader') WHERE
+         AS (UPDATE current_factions_members SET rank_id = (SELECT id FROM party_ranks WHERE name = 'co-leader') WHERE
         rank_id = (SELECT id FROM party_ranks WHERE name = 'leader') AND
         faction_id = (SELECT id FROM factions WHERE party_uuid = faction_uuid) RETURNING faction_id)
 UPDATE current_factions_members
@@ -1325,7 +1342,7 @@ WITH cte AS (SELECT dtr_freeze_timer
      _ as (
          DELETE
              FROM faction_current_dtr_regen_players
-                 WHERE faction_id = (SELECT faction_id FROM cte))
+                 WHERE faction_id = (SELECT faction_id FROM bar))
 INSERT
 INTO faction_current_dtr_regen_players (faction_id, user_uuid)
 SELECT faction_id, UNNEST(new_dtr_regen_players)
