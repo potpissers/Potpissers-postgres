@@ -1332,7 +1332,7 @@ $$
 DECLARE
     faction_id INTEGER;
 BEGIN
-    WITH _ AS (SELECT faction_id INTO faction_id FROM factions WHERE party_uuid = faction_uuid)
+    WITH _ AS (SELECT id INTO faction_id FROM factions WHERE party_uuid = faction_uuid)
     DELETE
     FROM faction_current_dtr_regen_players
     WHERE faction_current_dtr_regen_players.faction_id = handle_dtr_death_return_result.faction_id;
@@ -1347,7 +1347,6 @@ BEGIN
                                              FROM cte)
                  WHERE faction_data.faction_id = handle_dtr_death_return_result.faction_id
                  RETURNING faction_id, current_minimum_dtr, frozen_until)
-
     INSERT
     INTO faction_current_dtr_regen_players (faction_id, user_uuid)
     SELECT faction_id, UNNEST(new_dtr_regen_players)
