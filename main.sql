@@ -1335,7 +1335,7 @@ BEGIN
     WITH _ AS (SELECT faction_id INTO faction_id FROM factions WHERE party_uuid = faction_uuid)
     DELETE
     FROM faction_current_dtr_regen_players
-    WHERE faction_current_dtr_regen_players.faction_id = handle_dtr_death_return_result.faction_id;
+    WHERE faction_id = handle_dtr_death_return_result.faction_id;
 
     WITH cte AS (SELECT dtr_freeze_timer
                  FROM server_data
@@ -1345,7 +1345,7 @@ BEGIN
                  SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
                      frozen_until = NOW() + (SELECT dtr_freeze_timer * INTERVAL '1 second'
                                              FROM cte)
-                 WHERE faction_data.faction_id = handle_dtr_death_return_result.faction_id
+                 WHERE faction_data.faction_id = faction_id
                  RETURNING faction_id, current_minimum_dtr, frozen_until)
 
     INSERT
