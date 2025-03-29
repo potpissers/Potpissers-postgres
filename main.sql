@@ -1344,16 +1344,15 @@ BEGIN
     FROM server_data
     WHERE server_data.server_id = handle_dtr_death_return_result.server_id;
 
-    WITH bar AS (
-        UPDATE faction_data
-            SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
-                frozen_until = NOW() + dtr_freeze_timer
-            WHERE faction_data.faction_id = fac_id
-            RETURNING faction_id, current_minimum_dtr, frozen_until)
     INSERT
     INTO faction_current_dtr_regen_players (faction_id, user_uuid)
-    VALUES (fac_id, UNNEST(new_dtr_regen_players))
-    RETURNING bar.current_minimum_dtr, bar.frozen_until, dtr_freeze_timer;
+    VALUES (fac_id, UNNEST(new_dtr_regen_players));
+
+    UPDATE faction_data
+    SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
+        frozen_until        = NOW() + dtr_freeze_timer
+    WHERE faction_data.faction_id = fac_id
+    RETURNING current_minimum_dtr, frozen_until, dtr_freeze_timer;
 END;
 $$
     LANGUAGE plpgsql;
