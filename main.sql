@@ -1350,7 +1350,7 @@ BEGIN
 
     UPDATE faction_data
     SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
-        frozen_until        = NOW() + dtr_freeze_timer
+        frozen_until        = NOW() + dtr_freeze_timer * INTERVAL '1 second'
     WHERE faction_data.faction_id = fac_id
     RETURNING faction_data.current_minimum_dtr, faction_data.frozen_until, dtr_freeze_timer;
 END;
