@@ -698,6 +698,14 @@ VALUES (upsert_default_kit.kit_name, upsert_default_kit.bukkit_default_loadout)
 ON CONFLICT (kit_name) DO UPDATE SET bukkit_default_loadout = EXCLUDED.bukkit_default_loadout
 $$
     LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE update_default_kit_name(kit_name TEXT, server_id INTEGER)
+AS
+$$
+UPDATE server_data
+SET default_kit_name = kit_name
+WHERE server_data.server_id = update_default_kit_name.server_id
+$$
+    LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_kit_bukkit_default_contents(kit_name TEXT)
     RETURNS BYTEA AS
 $$
@@ -1214,9 +1222,10 @@ $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE delete_user_current_faction(user_uuid UUID, faction_uuid UUID)
 AS
 $$
-WITH cte as (DELETE FROM faction_current_dtr_regen_players WHERE faction_current_dtr_regen_players.user_uuid = delete_user_current_faction.user_uuid AND
-                                                                 faction_id =
-                                                                 (SELECT id FROM factions WHERE party_uuid = faction_uuid) RETURNING faction_id)
+WITH cte as (DELETE FROM faction_current_dtr_regen_players WHERE
+    faction_current_dtr_regen_players.user_uuid = delete_user_current_faction.user_uuid AND
+    faction_id =
+    (SELECT id FROM factions WHERE party_uuid = faction_uuid) RETURNING faction_id)
 DELETE
 FROM current_factions_members
 WHERE current_factions_members.user_uuid = delete_user_current_faction.user_uuid
