@@ -1332,7 +1332,7 @@ $$
 DECLARE
     fac_id INTEGER;
 BEGIN
-    WITH _ AS (SELECT id INTO fac_id FROM factions WHERE party_uuid = faction_uuid)
+    WITH _ AS (SELECT id FROM factions WHERE party_uuid = faction_uuid INTO fac_id)
     DELETE
     FROM faction_current_dtr_regen_players
     WHERE faction_current_dtr_regen_players.faction_id = fac_id;
