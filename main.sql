@@ -1243,7 +1243,8 @@ $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE handle_faction_disband(faction_uuid UUID)
 AS
 $$
-WITH cte AS (UPDATE factions SET is_disbanded = true WHERE party_uuid = faction_uuid RETURNING id)
+WITH cte AS (UPDATE factions SET is_disbanded = true WHERE party_uuid = faction_uuid RETURNING id),
+     foo AS (DELETE FROM faction_current_dtr_regen_players WHERE faction_id = (SELECT id FROM cte))
 DELETE
 FROM current_factions_members
 WHERE faction_id = (SELECT id FROM cte)
@@ -1320,7 +1321,7 @@ FROM faction_data
          JOIN factions ON factions.id = faction_data.faction_id
 WHERE factions.party_uuid = get_faction_data.party_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(server_id INTEGER, faction_uuid UUID, new_dtr_regen_players UUID[])
+CREATE OR REPLACE FUNCTION handle_dtr_death_return_result(faction_uuid UUID, server_id INTEGER, new_dtr_regen_players UUID[], dtr_amount REAL)
     RETURNS TABLE
             (
                 current_minimum_dtr REAL,
@@ -1332,7 +1333,6 @@ $$
 DECLARE
     fac_id           INTEGER;
     dtr_freeze_timer INTEGER;
-
 BEGIN
     SELECT id FROM factions WHERE party_uuid = faction_uuid INTO fac_id;
 
@@ -1350,7 +1350,7 @@ BEGIN
     VALUES (fac_id, UNNEST(new_dtr_regen_players));
 
     RETURN QUERY UPDATE faction_data
-        SET current_minimum_dtr = get_dtr(server_id, faction_uuid),
+        SET current_minimum_dtr = get_dtr(server_id, faction_uuid) - dtr_amount,
             frozen_until = NOW() + dtr_freeze_timer * INTERVAL '1 second'
         WHERE faction_data.faction_id = fac_id
         RETURNING faction_data.current_minimum_dtr, faction_data.frozen_until, dtr_freeze_timer;
