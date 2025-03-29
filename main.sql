@@ -1339,7 +1339,7 @@ BEGIN
     FROM faction_current_dtr_regen_players
     WHERE faction_current_dtr_regen_players.faction_id = fac_id;
 
-    SELECT dtr_freeze_timer
+    SELECT server_data.dtr_freeze_timer
     INTO dtr_freeze_timer
     FROM server_data
     WHERE server_data.server_id = handle_dtr_death_return_result.server_id;
