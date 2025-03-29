@@ -1352,7 +1352,7 @@ BEGIN
     INTO faction_current_dtr_regen_players (faction_id, user_uuid)
     SELECT faction_id, UNNEST(new_dtr_regen_players)
     FROM bar
-    RETURNING (SELECT current_minimum_dtr FROM bar), (SELECT frozen_until FROM bar), (SELECT cte.dtr_freeze_timer FROM cte);
+    RETURNING bar.current_minimum_dtr, bar.frozen_until, cte.dtr_freeze_timer;
 END;
 $$
     LANGUAGE plpgsql;
