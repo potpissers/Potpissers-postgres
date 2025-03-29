@@ -1352,8 +1352,7 @@ BEGIN
             RETURNING faction_id, current_minimum_dtr, frozen_until)
     INSERT
     INTO faction_current_dtr_regen_players (faction_id, user_uuid)
-    SELECT faction_id, UNNEST(new_dtr_regen_players)
-    FROM bar
+    VALUES (fac_id, UNNEST(new_dtr_regen_players))
     RETURNING bar.current_minimum_dtr, bar.frozen_until, dtr_freeze_timer;
 END;
 $$
