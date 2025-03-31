@@ -19,12 +19,14 @@ ON CONFLICT (name) DO UPDATE SET world_name = EXCLUDED.world_name,
                                  z          = EXCLUDED.z
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_kollusion_spawns()
+CREATE OR REPLACE FUNCTION get_random_kollusion_spawn()
     RETURNS SETOF kollusion_spawns
 AS
 $$
 SELECT *
 FROM kollusion_spawns
+ORDER BY RANDOM()
+LIMIT 1
 $$
     LANGUAGE sql;
 
