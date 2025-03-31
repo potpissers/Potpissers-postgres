@@ -961,6 +961,14 @@ ON CONFLICT (inviter_party_uuid, invited_party_uuid) DO UPDATE SET inviter_user_
                                                                    timestamp         = NOW()
 RETURNING xmax <> 0 -- TODO -> make this return the uuid if it already existed
 $$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE delete_ally_invite(party_uuid UUID, party_arg_uuid UUID)
+AS
+$$
+DELETE
+FROM ally_invites
+WHERE inviter_party_uuid = party_uuid
+  AND invited_party_uuid = party_arg_uuid
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS current_parties_relations
 (
