@@ -1039,6 +1039,9 @@ $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE handle_network_party_delete(party_uuid UUID)
 AS
 $$
+WITH _ AS (DELETE FROM current_parties_relations WHERE party_arg_uuid = handle_network_party_delete.party_uuid OR
+                                                       current_parties_relations.party_uuid =
+                                                       handle_network_party_delete.party_uuid)
 DELETE
 FROM current_parties_members
 WHERE current_parties_members.party_uuid = handle_network_party_delete.party_uuid
@@ -1256,7 +1259,8 @@ CREATE OR REPLACE PROCEDURE handle_faction_disband(faction_uuid UUID)
 AS
 $$
 WITH cte AS (UPDATE factions SET is_disbanded = true WHERE party_uuid = faction_uuid RETURNING id),
-     foo AS (DELETE FROM faction_current_dtr_regen_players WHERE faction_id = (SELECT id FROM cte))
+     _ AS (DELETE FROM faction_current_dtr_regen_players WHERE faction_id = (SELECT id FROM cte)),
+     _ AS (DELETE FROM current_parties_relations WHERE party_uuid = faction_uuid OR party_arg_uuid = faction_uuid)
 DELETE
 FROM current_factions_members
 WHERE faction_id = (SELECT id FROM cte)
