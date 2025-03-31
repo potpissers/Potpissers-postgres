@@ -1260,7 +1260,7 @@ AS
 $$
 WITH cte AS (UPDATE factions SET is_disbanded = true WHERE party_uuid = faction_uuid RETURNING id),
      _ AS (DELETE FROM faction_current_dtr_regen_players WHERE faction_id = (SELECT id FROM cte)),
-     _ AS (DELETE FROM current_parties_relations WHERE party_uuid = faction_uuid OR party_arg_uuid = faction_uuid)
+     _1 AS (DELETE FROM current_parties_relations WHERE party_uuid = faction_uuid OR party_arg_uuid = faction_uuid)
 DELETE
 FROM current_factions_members
 WHERE faction_id = (SELECT id FROM cte)
