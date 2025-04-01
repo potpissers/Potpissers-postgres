@@ -2301,7 +2301,6 @@ $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_14_newest_network_koths()
     RETURNS TABLE
             (
-                row_number             INTEGER,
                 server_koths_id        INTEGER,
                 start_timestamp        TIMESTAMPTZ,
                 loot_factor            INTEGER,
@@ -2321,9 +2320,7 @@ CREATE OR REPLACE FUNCTION get_14_newest_network_koths()
             )
 AS
 $$
-SELECT ROW_NUMBER() OVER (ORDER BY timestamp)                         AS row_number,
-
-       server_koths_id,
+SELECT server_koths_id,
        start_timestamp,
        loot_factor,
        max_timer,
@@ -2349,7 +2346,6 @@ $$
 CREATE OR REPLACE FUNCTION get_14_newest_server_koths(server_name TEXT)
     RETURNS TABLE
             (
-                row_number             INTEGER,
                 server_koths_id        INTEGER,
                 start_timestamp        TIMESTAMPTZ,
                 loot_factor            INTEGER,
@@ -2369,9 +2365,7 @@ CREATE OR REPLACE FUNCTION get_14_newest_server_koths(server_name TEXT)
             )
 AS
 $$
-SELECT ROW_NUMBER() OVER (ORDER BY timestamp)                         AS row_number,
-
-       server_koths_id,
+SELECT server_koths_id,
        start_timestamp,
        loot_factor,
        max_timer,
