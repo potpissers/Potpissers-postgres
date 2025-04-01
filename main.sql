@@ -2310,6 +2310,7 @@ CREATE OR REPLACE FUNCTION get_14_newest_network_koths()
                 end_timestamp          TIMESTAMPTZ,
                 capping_party_uuid     UUID,
                 world                  TEXT,
+                cap_message            TEXT,
                 x                      INTEGER,
                 y                      INTEGER,
                 z                      INTEGER,
