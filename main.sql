@@ -29,7 +29,8 @@ $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE insert_user_referral(ip TEXT, key TEXT, referrer TEXT, user_uuid UUID)
 AS
 $$
-WITH cte AS (INSERT INTO ip_referrals (pgcrypto_aes_ip, pgcrypto_aes_referrer) VALUES (pgp_sym_encrypt(ip, key, 'cipher-algo=aes128'),
+WITH cte
+         AS (INSERT INTO ip_referrals (pgcrypto_aes_ip, pgcrypto_aes_referrer) VALUES (pgp_sym_encrypt(ip, key, 'cipher-algo=aes128'),
                                                                                        pgp_sym_encrypt(referrer, key, 'cipher-algo=aes128')) ON CONFLICT DO NOTHING RETURNING *)
 INSERT
 INTO user_referrals (user_uuid, referrer)
@@ -38,12 +39,15 @@ FROM cte
 WHERE EXISTS(SELECT * FROM cte)
 ON CONFLICT DO NOTHING
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE handle_upsert_user_referral(user_uuid UUID, "timestamp" TIMESTAMPTZ, player_name TEXT)
+CREATE OR REPLACE PROCEDURE handle_upsert_user_referral(user_uuid UUID, "timestamp" TIMESTAMPTZ, ip TEXT, key TEXT,
+                                                        player_name TEXT)
 AS
 $$
 WITH cte AS (INSERT INTO user_referrals (user_uuid, timestamp)
     VALUES (handle_upsert_user_referral.user_uuid, handle_upsert_user_referral.timestamp)
-    ON CONFLICT (user_uuid) DO UPDATE SET timestamp = EXCLUDED.timestamp RETURNING *)
+    ON CONFLICT (user_uuid) DO UPDATE SET timestamp = EXCLUDED.timestamp RETURNING *),
+     _
+         AS (INSERT INTO ip_referrals (pgcrypto_aes_ip) VALUES (pgp_sym_encrypt(ip, key, 'cipher-algo=aes128')) ON CONFLICT DO NOTHING)
 SELECT pg_notify('referrals',
                  (SELECT json_build_object('player_uuid', cte.user_uuid, 'referrer', cte.referrer, 'timestamp',
                                            cte.timestamp, 'row_number',
