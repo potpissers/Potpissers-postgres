@@ -29,9 +29,9 @@ CREATE OR REPLACE FUNCTION get_user_referral_data(user_uuid UUID, ip_bytes BYTEA
             )
 AS
 $$
-SELECT EXISTS(SELECT *
-              FROM user_referrals
-              WHERE user_referrals.user_uuid = get_user_referral_data.user_uuid),
+SELECT (SELECT EXISTS(SELECT *
+                      FROM user_referrals
+                      WHERE user_referrals.user_uuid = get_user_referral_data.user_uuid)),
        (SELECT java_aes_referrer
         FROM ip_referrals
         WHERE java_hmac_ip = ip_bytes)
@@ -46,7 +46,8 @@ INTO user_referrals (user_uuid, referrer)
 VALUES (insert_user_referral.user_uuid, insert_user_referral.referrer)
 ON CONFLICT DO NOTHING
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE handle_upsert_user_referral(user_uuid UUID, "timestamp" TIMESTAMPTZ, ip_bytes BYTEA, player_name TEXT)
+CREATE OR REPLACE PROCEDURE handle_upsert_user_referral(user_uuid UUID, "timestamp" TIMESTAMPTZ, ip_bytes BYTEA,
+                                                        player_name TEXT)
 AS
 $$
 WITH cte AS (INSERT INTO user_referrals (user_uuid, timestamp)
