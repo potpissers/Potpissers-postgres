@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS user_referrals
 CREATE OR REPLACE FUNCTION get_user_referral_data(user_uuid UUID, ip_bytes BYTEA)
     RETURNS TABLE
             (
-                exists                  BOOLEAN,
+                "exists"                BOOLEAN,
                 nullable_refferer_bytes BYTEA
             )
 AS
