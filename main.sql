@@ -33,7 +33,8 @@ WITH cte AS (INSERT INTO ip_referrals (pgcrypto_aes_ip, pgcrypto_aes_referrer) V
                                                                                        pgp_sym_encrypt(referrer, key, 'aes')) ON CONFLICT DO NOTHING RETURNING *)
 INSERT
 INTO user_referrals (user_uuid, referrer)
-SELECT (insert_user_referral.user_uuid, insert_user_referral.referrer)
+SELECT insert_user_referral.user_uuid, insert_user_referral.referrer
+FROM cte
 WHERE EXISTS(SELECT * FROM cte)
 ON CONFLICT DO NOTHING
 $$ LANGUAGE sql;
