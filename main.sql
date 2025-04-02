@@ -16,9 +16,9 @@ CREATE TABLE IF NOT EXISTS user_referrals
 CREATE OR REPLACE FUNCTION get_user_referral_exists(user_uuid UUID, ip TEXT, key TEXT)
     RETURNS BOOLEAN AS
 $$
-WITH cte AS (SELECT pgp_sym_decrypt(pgcrypto_aes_referrer, key, 'aes128') AS referrer
+WITH cte AS (SELECT pgp_sym_decrypt(pgcrypto_aes_referrer, key, 'cipher-algo=aes128') AS referrer
              FROM ip_referrals
-             WHERE pgcrypto_aes_ip = pgp_sym_encrypt(ip, key, 'aes128')),
+             WHERE pgcrypto_aes_ip = pgp_sym_encrypt(ip, key, 'cipher-algo=aes128')),
      _ AS (INSERT INTO user_referrals (user_uuid, referrer) SELECT get_user_referral_exists.user_uuid, referrer
                                                             FROM cte
                                                             WHERE EXISTS(SELECT * FROM cte))
@@ -29,8 +29,8 @@ $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE insert_user_referral(ip TEXT, key TEXT, referrer TEXT, user_uuid UUID)
 AS
 $$
-WITH cte AS (INSERT INTO ip_referrals (pgcrypto_aes_ip, pgcrypto_aes_referrer) VALUES (pgp_sym_encrypt(ip, key, 'aes128'),
-                                                                                       pgp_sym_encrypt(referrer, key, 'aes128')) ON CONFLICT DO NOTHING RETURNING *)
+WITH cte AS (INSERT INTO ip_referrals (pgcrypto_aes_ip, pgcrypto_aes_referrer) VALUES (pgp_sym_encrypt(ip, key, 'cipher-algo=aes128'),
+                                                                                       pgp_sym_encrypt(referrer, key, 'cipher-algo=aes128')) ON CONFLICT DO NOTHING RETURNING *)
 INSERT
 INTO user_referrals (user_uuid, referrer)
 SELECT insert_user_referral.user_uuid, insert_user_referral.referrer
