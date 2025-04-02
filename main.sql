@@ -12,7 +12,7 @@ SET client_min_messages TO WARNING;
 
 CREATE TABLE IF NOT EXISTS ip_referrals
 (
-    java_hmac_ip      BYTEA NOT NULL,
+    java_hmac_ip      BYTEA PRIMARY KEY NOT NULL,
     java_aes_referrer BYTEA
 );
 CREATE TABLE IF NOT EXISTS user_referrals
