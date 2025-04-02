@@ -31,7 +31,7 @@ AS
 $$
 SELECT (SELECT EXISTS(SELECT *
                       FROM user_referrals
-                      WHERE user_referrals.user_uuid = get_user_referral_data.user_uuid)),
+                      WHERE user_referrals.user_uuid = get_user_referral_data.user_uuid) AS exists),
        (SELECT java_aes_referrer
         FROM ip_referrals
         WHERE java_hmac_ip = ip_bytes)
