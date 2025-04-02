@@ -880,11 +880,11 @@ $$ LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS user_current_punishments
 (
     punishment_id INTEGER PRIMARY KEY,
-    ip            TEXT,
+    java_hmac_ip  BYTEA,
     FOREIGN KEY (punishment_id) REFERENCES user_punishments (id)
 );
 CREATE OR REPLACE PROCEDURE insert_user_punishment(user_uuid UUID, server_id INTEGER, punishment_type_name TEXT,
-                                                   reason TEXT, expiration TIMESTAMPTZ, ip TEXT)
+                                                   reason TEXT, expiration TIMESTAMPTZ, ip_bytes BYTEA)
 AS
 $$
 WITH cte AS
@@ -894,10 +894,11 @@ WITH cte AS
                                                                                                               insert_user_punishment.reason,
                                                                                                               insert_user_punishment.expiration) RETURNING id)
 INSERT
-INTO user_current_punishments (punishment_id, ip)
-VALUES ((SELECT id FROM cte), insert_user_punishment.ip)
+INTO user_current_punishments (punishment_id, java_hmac_ip)
+VALUES ((SELECT id FROM cte), insert_user_punishment.ip_bytes)
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_farthest_user_ip_punishment(user_uuid UUID, ip TEXT, server_id INTEGER, punishment_type_name TEXT)
+CREATE OR REPLACE FUNCTION get_farthest_user_ip_punishment(user_uuid UUID, ip_bytes BYTEA, server_id INTEGER,
+                                                           punishment_type_name TEXT)
     RETURNS TABLE
             (
                 expiration TIMESTAMPTZ,
@@ -910,7 +911,7 @@ FROM user_punishments
          JOIN user_current_punishments ON user_punishments.id = user_current_punishments.punishment_id
          JOIN punishment_types ON user_punishments.punishment_type_id = punishment_types.id
 WHERE user_punishments.user_uuid != get_farthest_user_ip_punishment.user_uuid
-  AND user_current_punishments.ip = get_farthest_user_ip_punishment.ip
+  AND user_current_punishments.java_hmac_ip = get_farthest_user_ip_punishment.ip_bytes
   AND user_punishments.server_id = get_farthest_user_ip_punishment.server_id
   AND name = get_farthest_user_ip_punishment.punishment_type_name
   AND (NOT EXISTS(SELECT *
@@ -1804,11 +1805,11 @@ WHERE user_deaths.killer_uuid = get_user_kill_streak.user_uuid
   AND timestamp > (SELECT timestamp FROM latest_death)
 $$ LANGUAGE sql;
 
-CREATE TABLE IF NOT EXISTS current_heroes
+CREATE TABLE IF NOT EXISTS current_heroes -- TODO impl
 (
     user_uuid            UUID,
     server_id            INTEGER,
-    ip                   TEXT        NOT NULL,
+    java_hmac_ip         TEXT        NOT NULL,
     expiration_timestamp TIMESTAMPTZ NOT NULL,
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     PRIMARY KEY (user_uuid, server_id)
@@ -1851,11 +1852,11 @@ $$
     LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS current_bandits
 (
-    bandit_id INTEGER PRIMARY KEY,
-    ip        TEXT NOT NULL,
+    bandit_id    INTEGER PRIMARY KEY,
+    java_hmac_ip BYTEA NOT NULL,
     FOREIGN KEY (bandit_id) REFERENCES bandits (id)
 );
-CREATE OR REPLACE FUNCTION get_user_is_bandit(user_uuid UUID, server_id INTEGER, user_ip TEXT)
+CREATE OR REPLACE FUNCTION get_user_is_bandit(user_uuid UUID, server_id INTEGER, user_ip_bytes BYTEA)
     RETURNS BOOLEAN
 AS
 $$
@@ -1869,12 +1870,12 @@ SELECT EXISTS(SELECT expiration_timestamp
               WHERE bandits.server_id = get_user_is_bandit.server_id
                 AND expiration_timestamp > NOW()
                 AND (bandits.user_uuid = get_user_is_bandit.user_uuid OR
-                     (current_bandits.ip = user_ip AND NOT (SELECT is_ip_exempt FROM cte))))
+                     (current_bandits.java_hmac_ip = user_ip_bytes AND NOT (SELECT is_ip_exempt FROM cte))))
 $$
     LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE handle_insert_bandit(bandit_uuid UUID, server_id INTEGER, death_id INTEGER,
                                                  expiration TIMESTAMPTZ,
-                                                 bandit_message TEXT, ip TEXT)
+                                                 bandit_message TEXT, ip_bytes BYTEA)
 AS
 $$
 WITH cte
@@ -1890,8 +1891,8 @@ WITH cte
                                                       bandit_message)::TEXT
                              FROM user_deaths)))
 INSERT
-INTO current_bandits (bandit_id, ip)
-VALUES ((SELECT id FROM cte), handle_insert_bandit.ip)
+INTO current_bandits (bandit_id, java_hmac_ip)
+VALUES ((SELECT id FROM cte), handle_insert_bandit.ip_bytes)
 $$
     LANGUAGE sql;
 
@@ -1920,13 +1921,13 @@ LIMIT 1
 $$ LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS current_deathbans
 (
-    deathban_id INTEGER PRIMARY KEY,
-    ip          TEXT,
+    deathban_id  INTEGER PRIMARY KEY,
+    java_hmac_ip BYTEA, -- TODO not null ?
     FOREIGN KEY (deathban_id) REFERENCES deathbans (death_id) ON DELETE CASCADE
 );
 CREATE OR REPLACE FUNCTION handle_insert_deathban_return_duration_data_if_inserted(server_id INTEGER,
                                                                                    user_seconds_played INTEGER,
-                                                                                   death_id INTEGER, ip TEXT)
+                                                                                   death_id INTEGER, ip_bytes BYTEA)
     RETURNS TABLE
             (
                 death_ban_seconds   INTEGER,
@@ -1951,16 +1952,16 @@ BEGIN
     RETURNING expiration INTO deathban_expiration;
 
     INSERT
-    INTO current_deathbans (deathban_id, ip)
+    INTO current_deathbans (deathban_id, java_hmac_ip)
     SELECT handle_insert_deathban_return_duration_data_if_inserted.death_id,
-           handle_insert_deathban_return_duration_data_if_inserted.ip
+           handle_insert_deathban_return_duration_data_if_inserted.ip_bytes
     WHERE death_ban_seconds > 0;
 
     RETURN QUERY SELECT death_ban_seconds, deathban_expiration;
 END
 $$
     LANGUAGE plpgsql;
-CREATE OR REPLACE FUNCTION get_farthest_user_ip_deathban(user_uuid UUID, ip TEXT, server_id INTEGER)
+CREATE OR REPLACE FUNCTION get_farthest_user_ip_deathban(user_uuid UUID, ip_bytes BYTEA, server_id INTEGER)
     RETURNS TABLE
             (
                 expiration    TIMESTAMPTZ,
@@ -1973,7 +1974,7 @@ FROM deathbans
          JOIN current_deathbans ON deathbans.death_id = current_deathbans.deathban_id
          JOIN user_deaths ON deathbans.death_id = user_deaths.id
 WHERE victim_uuid != user_uuid
-  AND current_deathbans.ip = get_farthest_user_ip_deathban.ip
+  AND current_deathbans.java_hmac_ip = get_farthest_user_ip_deathban.ip_bytes
   AND user_deaths.server_id = get_farthest_user_ip_deathban.server_id
   AND (NOT EXISTS(SELECT *
                   FROM ip_exempt_uuids
