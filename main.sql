@@ -19,7 +19,8 @@ $$
 WITH cte AS (SELECT pgp_sym_decrypt(pgcrypto_aes_referrer, key, 'aes') AS referrer
              FROM ip_referrals
              WHERE pgcrypto_aes_ip = pgp_sym_encrypt(ip, key, 'aes')),
-     _ AS (INSERT INTO user_referrals (user_uuid, referrer) SELECT (user_uuid, (SELECT referrer FROM cte))
+     _ AS (INSERT INTO user_referrals (user_uuid, referrer) SELECT get_user_referral_exists.user_uuid, referrer
+                                                            FROM cte
                                                             WHERE EXISTS(SELECT * FROM cte))
 SELECT EXISTS(SELECT * FROM cte) OR EXISTS(SELECT *
                                            FROM user_referrals
