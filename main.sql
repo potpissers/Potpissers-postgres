@@ -31,7 +31,7 @@ AS
 $$
 WITH cte
          AS (INSERT INTO ip_referrals (pgcrypto_aes_ip, pgcrypto_aes_referrer) VALUES (pgp_sym_encrypt(ip, key, 'cipher-algo=aes128, s2k-mode=0, iv=0000000000000000'),
-                                                                                       pgp_sym_encrypt(referrer, key, 'cipher-algo=aes128, s2k-mode=0, iv=0000000000000000')) ON CONFLICT DO NOTHING RETURNING *)
+                                                                                       pgp_sym_encrypt(referrer, key, 'cipher-algo=aes128, s2k-mode=0, s2k-digest-algo=sha1, compress-algo=0')) ON CONFLICT DO NOTHING RETURNING *)
 INSERT
 INTO user_referrals (user_uuid, referrer)
 SELECT insert_user_referral.user_uuid, insert_user_referral.referrer
