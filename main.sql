@@ -25,16 +25,22 @@ CREATE OR REPLACE FUNCTION get_user_referral_data(user_uuid UUID, ip_bytes BYTEA
     RETURNS TABLE
             (
                 "exists"                BOOLEAN,
+                nullable_refferer       TEXT,
+                ip_exists               BOOLEAN,
                 nullable_refferer_bytes BYTEA
             )
 AS
 $$
-SELECT (SELECT EXISTS(SELECT *
-                      FROM user_referrals
-                      WHERE user_referrals.user_uuid = get_user_referral_data.user_uuid) AS exists),
-       (SELECT java_aes_referrer
-        FROM ip_referrals
-        WHERE java_hmac_ip = ip_bytes)
+WITH cte AS (SELECT referrer
+             FROM user_referrals
+             WHERE user_referrals.user_uuid = get_user_referral_data.user_uuid),
+     foo AS (SELECT java_aes_referrer
+             FROM ip_referrals
+             WHERE java_hmac_ip = ip_bytes)
+SELECT (SELECT EXISTS(SELECT * FROM cte) AS exists),
+       (SELECT referrer FROM cte),
+       (SELECT EXISTS(SELECT * FROM foo) AS ip_exists),
+       (SELECT java_aes_referrer FROM foo)
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE insert_user_referral(ip_bytes BYTEA, referrer_bytes BYTEA, user_uuid uuid, referrer TEXT)
 AS
