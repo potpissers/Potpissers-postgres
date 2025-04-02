@@ -1,25 +1,39 @@
 SET client_min_messages TO WARNING;
 
---TODO -> ip referrals, salt definitely necessary
---TODO -> hash ips
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS ip_referrals
+(
+    pgcrypto_aes_ip       BYTEA NOT NULL,
+    pgcrypto_aes_referrer BYTEA
+);
 CREATE TABLE IF NOT EXISTS user_referrals
 (
     user_uuid UUID PRIMARY KEY,
     referrer  TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE OR REPLACE FUNCTION get_user_referral_exists(user_uuid UUID)
+CREATE OR REPLACE FUNCTION get_user_referral_exists(user_uuid UUID, ip TEXT, key BYTEA)
     RETURNS BOOLEAN AS
 $$
-SELECT EXISTS(SELECT *
-              FROM user_referrals
-              WHERE get_user_referral_exists.user_uuid = get_user_referral_exists.user_uuid)
+WITH cte AS (SELECT pgp_sym_decrypt(pgcrypto_aes_referrer, key, 'aes') AS referrer
+             FROM ip_referrals
+             WHERE pgcrypto_aes_ip = pgp_sym_encrypt(ip, key, 'aes')),
+     _ AS (INSERT INTO user_referrals (user_uuid, referrer) SELECT (user_uuid, (SELECT referrer FROM cte))
+                                                            WHERE EXISTS(SELECT * FROM cte))
+SELECT EXISTS(SELECT * FROM cte) OR EXISTS(SELECT *
+                                           FROM user_referrals
+                                           WHERE user_referrals.user_uuid = get_user_referral_exists.user_uuid)
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE insert_user_referral(user_uuid UUID, referrer TEXT)
+CREATE OR REPLACE PROCEDURE insert_user_referral(ip TEXT, key BYTEA, referrer TEXT, user_uuid UUID)
 AS
 $$
-INSERT INTO user_referrals (user_uuid, referrer)
-VALUES (insert_user_referral.user_uuid, insert_user_referral.referrer)
+WITH cte AS (INSERT INTO ip_referrals (pgcrypto_aes_ip, pgcrypto_aes_referrer) VALUES (pgp_sym_encrypt(ip, key, 'aes'),
+                                                                                       pgp_sym_encrypt(referrer, key, 'aes')) ON CONFLICT DO NOTHING RETURNING *)
+INSERT
+INTO user_referrals (user_uuid, referrer)
+SELECT (insert_user_referral.user_uuid, insert_user_referral.referrer)
+WHERE EXISTS(SELECT * FROM cte)
 ON CONFLICT DO NOTHING
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE handle_upsert_user_referral(user_uuid UUID, "timestamp" TIMESTAMPTZ, player_name TEXT)
