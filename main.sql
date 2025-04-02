@@ -1,11 +1,19 @@
 SET client_min_messages TO WARNING;
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- DO $$
+--     DECLARE
+--         r RECORD;
+--     BEGIN
+--         FOR r IN (SELECT routine_schema, routine_name FROM information_schema.routines WHERE routine_type = 'FUNCTION')
+--             LOOP
+--                 EXECUTE format('DROP FUNCTION IF EXISTS %I.%I CASCADE', r.routine_schema, r.routine_name);
+--             END LOOP;
+--     END $$; TODO -> delete all functions and re-create them
 
 CREATE TABLE IF NOT EXISTS ip_referrals
 (
-    pgcrypto_aes_ip       BYTEA NOT NULL,
-    pgcrypto_aes_referrer BYTEA
+    java_hmac_ip      BYTEA NOT NULL,
+    java_aes_referrer BYTEA
 );
 CREATE TABLE IF NOT EXISTS user_referrals
 (
@@ -13,41 +21,38 @@ CREATE TABLE IF NOT EXISTS user_referrals
     referrer  TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE OR REPLACE FUNCTION get_user_referral_exists(user_uuid UUID, ip TEXT, key TEXT)
-    RETURNS BOOLEAN AS
-$$
-WITH cte AS (SELECT pgp_sym_decrypt(pgcrypto_aes_referrer, key, 'cipher-algo=aes128, s2k-mode=0, iv=0000000000000000') AS referrer
-             FROM ip_referrals
-             WHERE pgcrypto_aes_ip = pgp_sym_encrypt(ip, key, 'cipher-algo=aes128, s2k-mode=0, iv=0000000000000000')),
-     _ AS (INSERT INTO user_referrals (user_uuid, referrer) SELECT get_user_referral_exists.user_uuid, referrer
-                                                            FROM cte
-                                                            WHERE EXISTS(SELECT * FROM cte))
-SELECT EXISTS(SELECT * FROM cte) OR EXISTS(SELECT *
-                                           FROM user_referrals
-                                           WHERE user_referrals.user_uuid = get_user_referral_exists.user_uuid)
-$$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE insert_user_referral(ip TEXT, key TEXT, referrer TEXT, user_uuid UUID)
+CREATE OR REPLACE FUNCTION get_user_referral_data(user_uuid UUID, ip_bytes BYTEA)
+    RETURNS TABLE
+            (
+                exists                  BOOLEAN,
+                nullable_refferer_bytes BYTEA
+            )
 AS
 $$
-WITH cte
-         AS (INSERT INTO ip_referrals (pgcrypto_aes_ip, pgcrypto_aes_referrer) VALUES (pgp_sym_encrypt(ip, key, 'cipher-algo=aes128, s2k-mode=0, iv=0000000000000000'),
-                                                                                       pgp_sym_encrypt(referrer, key, 'cipher-algo=aes128, s2k-mode=0, s2k-digest-algo=sha1, compress-algo=0')) ON CONFLICT DO NOTHING RETURNING *)
+SELECT EXISTS(SELECT *
+              FROM user_referrals
+              WHERE user_referrals.user_uuid = get_user_referral_exists.user_uuid),
+       (SELECT java_aes_referrer
+        FROM ip_referrals
+        WHERE java_hmac_ip = ip_bytes)
+$$ LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE insert_user_referral(ip_bytes BYTEA, referrer_bytes BYTEA, user_uuid uuid, referrer TEXT)
+AS
+$$
+WITH _
+         AS (INSERT INTO ip_referrals (java_hmac_ip, java_aes_referrer) VALUES (ip_bytes, referrer_bytes) ON CONFLICT DO NOTHING)
 INSERT
 INTO user_referrals (user_uuid, referrer)
-SELECT insert_user_referral.user_uuid, insert_user_referral.referrer
-FROM cte
-WHERE EXISTS(SELECT * FROM cte)
+VALUES (insert_user_referral.user_uuid, insert_user_referral.referrer)
 ON CONFLICT DO NOTHING
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE handle_upsert_user_referral(user_uuid UUID, "timestamp" TIMESTAMPTZ, ip TEXT, key TEXT,
-                                                        player_name TEXT)
+CREATE OR REPLACE PROCEDURE handle_upsert_user_referral(user_uuid UUID, "timestamp" TIMESTAMPTZ, ip_bytes BYTEA, player_name TEXT)
 AS
 $$
 WITH cte AS (INSERT INTO user_referrals (user_uuid, timestamp)
     VALUES (handle_upsert_user_referral.user_uuid, handle_upsert_user_referral.timestamp)
     ON CONFLICT (user_uuid) DO UPDATE SET timestamp = EXCLUDED.timestamp RETURNING *),
-     _
-         AS (INSERT INTO ip_referrals (pgcrypto_aes_ip) VALUES (pgp_sym_encrypt(ip, key, 'cipher-algo=aes128, s2k-mode=0, iv=0000000000000000')) ON CONFLICT DO NOTHING)
+     _ AS (INSERT INTO ip_referrals (java_hmac_ip) VALUES (ip_bytes) ON CONFLICT DO NOTHING)
 SELECT pg_notify('referrals',
                  (SELECT json_build_object('player_uuid', cte.user_uuid, 'referrer', cte.referrer, 'timestamp',
                                            cte.timestamp, 'row_number',
