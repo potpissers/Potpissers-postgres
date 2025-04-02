@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS user_referrals
     referrer  TEXT,
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE OR REPLACE FUNCTION get_user_referral_exists(user_uuid UUID, ip TEXT, key BYTEA)
+CREATE OR REPLACE FUNCTION get_user_referral_exists(user_uuid UUID, ip TEXT, key TEXT)
     RETURNS BOOLEAN AS
 $$
 WITH cte AS (SELECT pgp_sym_decrypt(pgcrypto_aes_referrer, key, 'aes') AS referrer
@@ -25,7 +25,7 @@ SELECT EXISTS(SELECT * FROM cte) OR EXISTS(SELECT *
                                            FROM user_referrals
                                            WHERE user_referrals.user_uuid = get_user_referral_exists.user_uuid)
 $$ LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE insert_user_referral(ip TEXT, key BYTEA, referrer TEXT, user_uuid UUID)
+CREATE OR REPLACE PROCEDURE insert_user_referral(ip TEXT, key TEXT, referrer TEXT, user_uuid UUID)
 AS
 $$
 WITH cte AS (INSERT INTO ip_referrals (pgcrypto_aes_ip, pgcrypto_aes_referrer) VALUES (pgp_sym_encrypt(ip, key, 'aes'),
