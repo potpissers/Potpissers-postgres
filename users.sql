@@ -1,5 +1,5 @@
 DROP TABLE chat_types;
-CREATE UNLOGGED TABLE chat_types
+CREATE UNLOGGED TABLE IF NOT EXISTS chat_types
 (
     id   INTEGER PRIMARY KEY,
     name TEXT NOT NULL
@@ -15,14 +15,45 @@ VALUES (0, 'local'),
        (6, 'enemy'),
        (7, 'fight');
 
+CREATE TABLE IF NOT EXISTS user_unlocked_chat_prefixes
+(
+    java_chat_prefix_id INTEGER,
+    user_uuid           UUID,
+    PRIMARY KEY (java_chat_prefix_id, user_uuid)
+);
+CREATE OR REPLACE FUNCTION toggle_user_chat_prefix_returning_result(prefix_id INTEGER, user_uuid UUID)
+    RETURNS BOOLEAN
+AS
+$$
+WITH cte AS (DELETE FROM user_unlocked_chat_prefixes WHERE java_chat_prefix_id = prefix_id AND
+                                                           user_unlocked_chat_prefixes.user_uuid =
+                                                           toggle_user_chat_prefix_returning_result.user_uuid RETURNING *),
+     _ AS (INSERT
+         INTO user_unlocked_chat_prefixes (java_chat_prefix_id, user_uuid)
+             SELECT prefix_id, toggle_user_chat_prefix_returning_result.user_uuid
+             WHERE NOT EXISTS(SELECT * FROM cte))
+SELECT NOT EXISTS(SELECT * FROM cte)
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_user_unlocked_chat_prefixes(user_uuid UUID)
+    RETURNS INTEGER[]
+AS
+$$
+SELECT COALESCE(array_agg(java_chat_prefix_id), '{}')
+FROM user_unlocked_chat_prefixes
+WHERE user_unlocked_chat_prefixes.user_uuid = get_user_unlocked_chat_prefixes.user_uuid
+$$
+    LANGUAGE sql;
+
 CREATE TABLE IF NOT EXISTS user_data
 (
-    user_uuid            UUID PRIMARY KEY,
-    chat_type_id         INTEGER DEFAULT '1', -- default -> all chat
-    is_all_chat_disabled BOOLEAN DEFAULT FALSE,
-    is_chat_mod          BOOLEAN DEFAULT FALSE,
-    java_personal_mutes  BYTEA,
-    party_uuid           UUID
+    user_uuid                   UUID PRIMARY KEY,
+    chat_type_id                INTEGER DEFAULT '1', -- default -> all chat
+    is_all_chat_disabled        BOOLEAN DEFAULT FALSE,
+    is_chat_mod                 BOOLEAN DEFAULT FALSE,
+    current_java_chat_prefix_id INTEGER,
+    java_personal_mutes         BYTEA,
+    party_uuid                  UUID
 );
 CREATE OR REPLACE PROCEDURE upsert_user_data(user_uuid UUID)
 AS
@@ -66,9 +97,16 @@ WHERE user_uuid = toggle_is_user_chat_mod_return_result.user_uuid
 RETURNING is_chat_mod
 $$
     LANGUAGE sql;
-
-CREATE OR REPLACE PROCEDURE foo()
+CREATE OR REPLACE FUNCTION update_chat_prefix_returning_star_if_successful(user_uuid UUID, prefix_id INTEGER)
+    RETURNS SETOF user_data
 AS
 $$
+UPDATE user_data
+SET current_java_chat_prefix_id = prefix_id
+WHERE EXISTS(SELECT *
+             FROM user_unlocked_chat_prefixes
+             WHERE java_chat_prefix_id = prefix_id
+               AND user_unlocked_chat_prefixes.user_uuid = update_chat_prefix_returning_star_if_successful.user_uuid)
+RETURNING *
 $$
     LANGUAGE sql;

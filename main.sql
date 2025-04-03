@@ -248,8 +248,7 @@ CREATE TABLE IF NOT EXISTS servers
     timestamp TIMESTAMPTZ DEFAULT NOW() -- TODO (?) -> isWhitelisted
 );
 
-DROP TABLE online_players;
-CREATE UNLOGGED TABLE online_players
+CREATE UNLOGGED TABLE IF NOT EXISTS online_players
 (
     user_uuid    UUID PRIMARY KEY,
     user_name    TEXT NOT NULL,
