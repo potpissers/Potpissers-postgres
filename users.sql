@@ -97,16 +97,31 @@ WHERE user_uuid = toggle_is_user_chat_mod_return_result.user_uuid
 RETURNING is_chat_mod
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION update_chat_prefix_returning_star_if_successful(user_uuid UUID, prefix_id INTEGER)
-    RETURNS SETOF user_data
+CREATE OR REPLACE FUNCTION toggle_chat_prefix_returning_is_null_if_successful(user_uuid UUID, prefix_id INTEGER)
+    RETURNS BOOLEAN
 AS
 $$
 UPDATE user_data
-SET current_java_chat_prefix_id = prefix_id
+SET current_java_chat_prefix_id = CASE
+                                      WHEN EXISTS(SELECT *
+                                                  FROM user_data
+                                                  WHERE user_data.user_uuid =
+                                                        toggle_chat_prefix_returning_is_null_if_successful.user_uuid
+                                                    AND current_java_chat_prefix_id = prefix_id) THEN null
+                                      ELSE prefix_id END
 WHERE EXISTS(SELECT *
              FROM user_unlocked_chat_prefixes
              WHERE java_chat_prefix_id = prefix_id
-               AND user_unlocked_chat_prefixes.user_uuid = update_chat_prefix_returning_star_if_successful.user_uuid)
-RETURNING *
+               AND user_unlocked_chat_prefixes.user_uuid = toggle_chat_prefix_returning_is_null_if_successful.user_uuid)
+RETURNING current_java_chat_prefix_id IS NULL
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_nullable_user_chat_prefix_id(user_uuid UUID)
+    RETURNS INTEGER
+AS
+$$
+SELECT current_java_chat_prefix_id
+FROM user_data
+WHERE user_data.user_uuid = get_nullable_user_chat_prefix_id.user_uuid
 $$
     LANGUAGE sql;
