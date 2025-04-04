@@ -119,15 +119,16 @@ CREATE UNLOGGED TABLE line_items
 INSERT INTO line_items (id, game_mode_name, line_item_name, value_in_cents, description, is_plural)
 VALUES (0, 'hcf', 'life', 400,
         '/revive (username). removes deathban (alts aren''t affected). current revive life cost: /lives', true),
-       (1, 'hcf', 'basic', 800, 'green name, basic server slot, and revive cost + deathban reduced to 80%', false),
-       (2, 'hcf', 'gold', 1600, 'yellow name, gold server slot, and revive cost + deathban reduced to 60%', false),
-       (3, 'hcf', 'diamond', 2400, 'aqua name, diamond server slot, and revive cost + deathban reduced to 40%', false),
-       (4, 'hcf', 'ruby', 3200, 'red name, ruby server slot, and revive cost + deathban reduced to 20%', false),
+       (1, 'hcf', 'basic rank', 800, 'green name, basic server slot, and revive cost + deathban reduced to 80%', false),
+       (2, 'hcf', 'gold rank', 1600, 'yellow name, gold server slot, and revive cost + deathban reduced to 60%', false),
+       (3, 'hcf', 'diamond rank', 2400, 'aqua name, diamond server slot, and revive cost + deathban reduced to 40%',
+        false),
+       (4, 'hcf', 'ruby rank', 3200, 'red name, ruby server slot, and revive cost + deathban reduced to 20%', false),
        (5, 'mz', 'life', 400, '/revive (username). removes alt deathban', true),
-       (6, 'mz', 'basic', 600, 'green name, basic server slot', false),
-       (7, 'mz', 'gold', 1200, 'yellow name, gold server slot', false),
-       (8, 'mz', 'diamond', 1800, 'aqua name, diamond server slot', false),
-       (9, 'mz', 'ruby', 2400, 'red name, ruby server slot', false);
+       (6, 'mz', 'basic rank', 600, 'green name, basic server slot', false),
+       (7, 'mz', 'gold rank', 1200, 'yellow name, gold server slot', false),
+       (8, 'mz', 'diamond rank', 1800, 'aqua name, diamond server slot', false),
+       (9, 'mz', 'ruby rank', 2400, 'red name, ruby server slot', false);
 CREATE OR REPLACE FUNCTION get_line_items()
     RETURNS TABLE
             (
@@ -2373,7 +2374,8 @@ FROM koths
          JOIN server_koths ON server_koths_id = server_koths.id
          JOIN servers ON servers.id = server_koths.server_id
          JOIN arena_data ON arena_data.id = server_koths.arena_id
-ORDER BY end_timestamp IS NULL, end_timestamp
+WHERE end_timestamp IS NOT NULL
+ORDER BY end_timestamp
 LIMIT 14
 $$
     LANGUAGE sql;
@@ -2421,6 +2423,7 @@ FROM koths
          JOIN servers ON servers.id = server_koths.server_id
          JOIN arena_data ON arena_data.id = server_koths.arena_id
 WHERE servers.name = get_14_newest_server_koths.server_name
+  AND end_timestamp IS NOT NULL
 ORDER BY end_timestamp IS NULL, end_timestamp
 LIMIT 14
 $$
