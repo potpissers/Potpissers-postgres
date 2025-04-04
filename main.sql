@@ -362,6 +362,7 @@ CREATE OR REPLACE FUNCTION upsert_server_return_data(game_mode_name TEXT, server
                 is_initially_whitelisted          BOOLEAN,
                 attack_speed_id                   INTEGER,
                 death_ban_minutes                 INTEGER,
+                is_ip_deathban_else_full          BOOLEAN,
                 world_border_radius               INTEGER,
                 default_kit_name                  TEXT,
                 default_koth_loot_factor          INTEGER,
