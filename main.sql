@@ -242,11 +242,13 @@ VALUES (0, 'member'),
        (2, 'co-leader'),
        (3, 'leader');
 
-CREATE TABLE IF NOT EXISTS servers
+CREATE TABLE IF NOT EXISTS servers -- the current servers table is altered to match this
 (
-    id        INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name      TEXT UNIQUE NOT NULL,
-    timestamp TIMESTAMPTZ DEFAULT NOW() -- TODO (?) -> isWhitelisted
+    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    game_mode_name TEXT NOT NULL,
+    name           TEXT,
+    timestamp      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (game_mode_name, name)
 );
 
 CREATE UNLOGGED TABLE IF NOT EXISTS online_players
@@ -332,6 +334,7 @@ CREATE TABLE IF NOT EXISTS server_data
     is_initially_whitelisted          BOOLEAN DEFAULT TRUE,
     attack_speed_id                   INTEGER DEFAULT 2, -- default 7cps
     death_ban_minutes                 INTEGER DEFAULT 0,
+    is_ip_deathban_else_full          BOOLEAN DEFAULT TRUE,
     world_border_radius               INTEGER DEFAULT 1250,
     default_kit_name                  TEXT    DEFAULT NULL,
     default_koth_loot_factor          INTEGER DEFAULT 1,
@@ -352,8 +355,8 @@ CREATE TABLE IF NOT EXISTS server_data
     rogue_radius                      INTEGER DEFAULT 5,
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
-CREATE OR REPLACE FUNCTION upsert_server_return_data(server_name TEXT)
-    RETURNS TABLE -- TODO record (?)
+CREATE OR REPLACE FUNCTION upsert_server_return_data(game_mode_name TEXT, server_name TEXT)
+    RETURNS TABLE
             (
                 server_id                         INTEGER,
                 is_initially_whitelisted          BOOLEAN,
@@ -383,9 +386,9 @@ CREATE OR REPLACE FUNCTION upsert_server_return_data(server_name TEXT)
 AS
 $$
 WITH cte AS (
-    INSERT INTO servers (name)
-        VALUES (server_name)
-        ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+    INSERT INTO servers (game_mode_name, name)
+        VALUES (upsert_server_return_data.game_mode_name, server_name)
+        ON CONFLICT (game_mode_name, name) DO UPDATE SET name = EXCLUDED.name
         RETURNING id)
 INSERT
 INTO server_data (server_id)
@@ -1906,6 +1909,7 @@ CREATE TABLE IF NOT EXISTS deathbans
 (
     death_id   INTEGER PRIMARY KEY,
     expiration TIMESTAMPTZ NOT NULL,
+    is_ip_only BOOLEAN     NOT NULL,
     FOREIGN KEY (death_id) REFERENCES user_deaths (id) ON DELETE CASCADE
 );
 CREATE OR REPLACE FUNCTION get_farthest_user_death_ban(victim_uuid UUID, server_id INTEGER)
@@ -1922,6 +1926,7 @@ FROM deathbans
 WHERE user_deaths.victim_uuid = get_farthest_user_death_ban.victim_uuid
   AND user_deaths.server_id = get_farthest_user_death_ban.server_id
   AND expiration > NOW()
+  AND NOT is_ip_only
 ORDER BY expiration DESC
 LIMIT 1
 $$ LANGUAGE sql;
@@ -1937,23 +1942,26 @@ CREATE OR REPLACE FUNCTION handle_insert_deathban_return_duration_data_if_insert
     RETURNS TABLE
             (
                 death_ban_seconds   INTEGER,
-                deathban_expiration TIMESTAMPTZ
+                deathban_expiration TIMESTAMPTZ,
+                is_ip_only          BOOLEAN
             )
 AS
 $$
 DECLARE
     death_ban_seconds   INTEGER;
+    is_ip_only          BOOLEAN;
     deathban_expiration TIMESTAMPTZ;
 BEGIN
-    SELECT LEAST(death_ban_minutes * 60, user_seconds_played)
-    INTO death_ban_seconds
+    SELECT LEAST(death_ban_minutes * 60, user_seconds_played), is_ip_deathban_else_full
+    INTO death_ban_seconds, is_ip_only
     FROM server_data
     WHERE server_data.server_id =
           handle_insert_deathban_return_duration_data_if_inserted.server_id;
 
-    INSERT INTO deathbans (death_id, expiration)
+    INSERT INTO deathbans (death_id, expiration, is_ip_only)
     SELECT handle_insert_deathban_return_duration_data_if_inserted.death_id,
-           NOW() + death_ban_seconds * INTERVAL '1 second'
+           NOW() + death_ban_seconds * INTERVAL '1 second',
+           is_ip_only
     WHERE death_ban_seconds > 0
     RETURNING expiration INTO deathban_expiration;
 
@@ -1963,7 +1971,7 @@ BEGIN
            handle_insert_deathban_return_duration_data_if_inserted.ip_bytes
     WHERE death_ban_seconds > 0;
 
-    RETURN QUERY SELECT death_ban_seconds, deathban_expiration;
+    RETURN QUERY SELECT death_ban_seconds, deathban_expiration, is_ip_only;
 END
 $$
     LANGUAGE plpgsql;
