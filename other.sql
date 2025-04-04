@@ -157,7 +157,17 @@ VALUES ('potpissers', 'piglin combat logger',
        ('cubecore_classes', 'miner', '- passive haste 1, holding gold gives haste 2, activating gold gives haste 3
                     - class items: use /classitems
                     - mining past diamond ore thresholds upgrades your miner class'' abilities: use /classitems
-                    - 50 ores mined: passive invisibility below y 16. 100 ores mined: passive fire resistance + water-breathing below y 16. 150 ores mined: passive speed 1 + sugar class item unlocked. 200 ores mined: feather/membrane class items unlocked. 250 ores mined: wheat class item unlocked + passive saturation below y 16, 300 ores mined: upgraded haste + miner''s fatigue class item unlocked. 350 ores mined: glow ink sac class item unlocked');
+                    - 50 ores mined: passive invisibility below y 16. 100 ores mined: passive fire resistance + water-breathing below y 16. 150 ores mined: passive speed 1 + sugar class item unlocked. 200 ores mined: feather/membrane class items unlocked. 250 ores mined: wheat class item unlocked + passive saturation below y 16, 300 ores mined: upgraded haste + miner''s fatigue class item unlocked. 350 ores mined: glow ink sac class item unlocked'),
+
+       ('kollusion', 'kollusion repair buff',
+        'crafting menu repairing passes the least common enchantments to the result item. (repairing two ff4 boots together doesn''t remove the ff4)'),
+       ('kollusion', 'kollusion elytras', 'found elytras break very quickly'),
+       ('kollusion', 'kollusion splash 2s',
+        'splash instant health 2s aren''t exempt from the standard potpissers splash potion nerf. (they are 85% effective unless thrown directly upwards)'),
+       ('kollusion', 'kollusion instant health + golden apple buff',
+        'instant health potions and golden apples has been buffed to 1.6 minecraft''s levels, +50%'),
+       ('kollusion', 'kollusion speed potions/other rare consumables',
+        'speed potions and other brewable potions/rare consumables all share the same cooldown');
 CREATE OR REPLACE FUNCTION get_tips()
     RETURNS TABLE
             (
