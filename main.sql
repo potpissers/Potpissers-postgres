@@ -2478,7 +2478,7 @@ CREATE TABLE IF NOT EXISTS supply_drops
 CREATE TABLE IF NOT EXISTS supply_drops_rounds
 (
     supply_drop_id INTEGER,
-    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id             INTEGER GENERATED ALWAYS AS IDENTITY,
     timestamp      TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (supply_drop_id) REFERENCES supply_drops (id) ON DELETE CASCADE,
     PRIMARY KEY (supply_drop_id, id)
@@ -2490,14 +2490,6 @@ CREATE TABLE IF NOT EXISTS supply_drops_rounds_item_data
     items_looted         INTEGER NOT NULL,
     FOREIGN KEY (supply_drop_round_id) REFERENCES supply_drops_rounds (id) ON DELETE CASCADE,
     PRIMARY KEY (supply_drop_round_id, user_uuid)
-);
-CREATE TABLE IF NOT EXISTS supply_drops_timestamps
-(
-    supply_drop_id INTEGER,
-    timestamp      TIMESTAMPTZ DEFAULT NOW(),
-    reason         TEXT NOT NULL,
-    FOREIGN KEY (supply_drop_id) REFERENCES supply_drops (id) ON DELETE CASCADE,
-    PRIMARY KEY (supply_drop_id, timestamp, reason)
 );
 CREATE OR REPLACE FUNCTION insert_supply_drop_return_data(server_id INTEGER,
                                                           world_name TEXT,
@@ -2516,7 +2508,7 @@ VALUES (insert_supply_drop_return_data.server_id, NOW(),
         insert_supply_drop_return_data.x, insert_supply_drop_return_data.y,
         insert_supply_drop_return_data.z, insert_supply_drop_return_data.radius,
         insert_supply_drop_return_data.chest_open_timestamp,
-        (SELECT loot_factor
+        (SELECT default_koth_loot_factor
          FROM server_data
          WHERE server_data.server_id = insert_supply_drop_return_data.server_id),
         insert_supply_drop_return_data.restock_timer,
