@@ -2469,35 +2469,43 @@ CREATE TABLE IF NOT EXISTS supply_drops
     restock_amount              INTEGER     NOT NULL,
 
     end_timestamp               TIMESTAMPTZ,
-    winning_party_uuid          UUID,
-    winning_player_uuid         UUID,
     win_message                 TEXT,
     FOREIGN KEY (nullable_server_koth_id) REFERENCES server_koths (id),
     FOREIGN KEY (server_id) REFERENCES servers (id)
 );
-CREATE TABLE IF NOT EXISTS supply_drops_rounds
+CREATE TABLE IF NOT EXISTS supply_drop_rounds
 (
-    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    supply_drop_id INTEGER,
-    timestamp      TIMESTAMPTZ DEFAULT NOW(),
+    id                              INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    supply_drop_id                  INTEGER NOT NULL,
+    timestamp                       TIMESTAMPTZ DEFAULT NOW(),
+    java_chest_location_coordinates BYTEA   NOT NULL,
+
+    win_message                     TEXT,
+    end_timestamp                   TIMESTAMPTZ,
     FOREIGN KEY (supply_drop_id) REFERENCES supply_drops (id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS supply_drops_rounds_item_data
 (
     supply_drop_round_id INTEGER NOT NULL,
     user_uuid            UUID    NOT NULL,
-    items_looted         INTEGER NOT NULL,
-    FOREIGN KEY (supply_drop_round_id) REFERENCES supply_drops_rounds (id) ON DELETE CASCADE,
+    party_uuid           UUID,
+    chests_looted        INTEGER NOT NULL,
+    FOREIGN KEY (supply_drop_round_id) REFERENCES supply_drop_rounds (id) ON DELETE CASCADE,
     PRIMARY KEY (supply_drop_round_id, user_uuid)
 );
 CREATE OR REPLACE FUNCTION insert_supply_drop_return_data(server_id INTEGER,
                                                           world_name TEXT,
                                                           x INTEGER, y INTEGER, z INTEGER, radius INTEGER,
-                                                          chest_open_timestamp TIMESTAMPTZ, restock_timer INTEGER,
+                                                          chest_open_timestamp TIMESTAMPTZ,
+                                                          restock_timer INTEGER,
                                                           restock_amount INTEGER,
                                                           nullable_server_koth_id INTEGER,
                                                           is_koth_movement_restricted BOOLEAN)
-    RETURNS SETOF supply_drops
+    RETURNS TABLE
+            (
+                loot_factor    INTEGER,
+                supply_drop_id INTEGER
+            )
 AS
 $$
 INSERT INTO supply_drops (server_id, start_timestamp, world_name, x, y, z, radius, chest_open_timestamp, loot_factor,
@@ -2514,7 +2522,95 @@ VALUES (insert_supply_drop_return_data.server_id, NOW(),
         insert_supply_drop_return_data.restock_amount,
         insert_supply_drop_return_data.nullable_server_koth_id,
         insert_supply_drop_return_data.is_koth_movement_restricted)
-RETURNING *
+RETURNING loot_factor, id
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE insert_supply_drop_round(id INTEGER, bytes BYTEA)
+AS
+$$
+INSERT INTO supply_drop_rounds (supply_drop_id, java_chest_location_coordinates)
+VALUES (insert_supply_drop_round.id, bytes)
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION insert_supply_drop_round_data_return_data_if_continuing(id INTEGER)
+    RETURNS SETOF supply_drops
+AS
+$$
+WITH _ AS (
+    UPDATE supply_drop_rounds
+        SET end_timestamp = NOW()
+        WHERE supply_drop_id = id
+            AND end_timestamp IS NULL)
+SELECT *
+FROM supply_drops
+WHERE supply_drops.id = insert_supply_drop_round_data_return_data_if_continuing.id
+  AND EXISTS(SELECT *
+             FROM supply_drops
+             WHERE supply_drops.id = insert_supply_drop_round_data_return_data_if_continuing.id
+               AND (SELECT COUNT(*)
+                    FROM supply_drop_rounds
+                    WHERE supply_drop_id = insert_supply_drop_round_data_return_data_if_continuing.id) < restock_amount)
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE upsert_supply_drop_round_data(id INTEGER, user_uuid UUID, party_uuid UUID) -- TODO -> make this message the player with an update
+AS
+$$
+WITH cte AS (SELECT EXISTS(SELECT *
+                           FROM supply_drops
+                           WHERE end_timestamp IS NULL
+                             AND supply_drops.id = upsert_supply_drop_round_data.id) AS isnt_expired)
+INSERT
+INTO supply_drops_rounds_item_data (supply_drop_round_id, user_uuid, party_uuid, chests_looted)
+SELECT (SELECT supply_drop_rounds.id
+        FROM supply_drop_rounds
+        WHERE supply_drop_id = upsert_supply_drop_round_data.id
+          AND end_timestamp IS NULL),
+       upsert_supply_drop_round_data.user_uuid,
+       upsert_supply_drop_round_data.party_uuid,
+       1
+FROM cte
+WHERE isnt_expired
+ON CONFLICT (supply_drop_round_id, user_uuid) DO UPDATE SET chests_looted = chests_looted + 1
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_supply_drop_winner_data(supply_drop_id INTEGER)
+    RETURNS TABLE
+            (
+                highest_user_uuid    UUID,
+                highest_user_amount  INTEGER,
+                highest_party_uuid   UUID,
+                highest_party_amount INTEGER
+            )
+AS
+$$
+WITH cte AS (SELECT id
+             FROM supply_drop_rounds
+             WHERE supply_drop_rounds.supply_drop_id = upsert_supply_drop_return_data.supply_drop_id),
+     foo AS (SELECT user_uuid, SUM(chests_looted) AS total_chests_looted
+             FROM supply_drops_rounds_item_data
+             WHERE supply_drop_round_id IN (SELECT id FROM cte)
+             GROUP BY user_uuid
+             ORDER BY total_chests_looted DESC
+             LIMIT 1),
+     bar AS (SELECT party_uuid, SUM(chests_looted) AS total_chests_looted
+             FROM supply_drops_rounds_item_data
+             WHERE supply_drop_round_id IN (SELECT id FROM cte)
+               AND party_uuid IS NOT NULL
+             GROUP BY party_uuid
+             ORDER BY total_chests_looted DESC
+             LIMIT 1)
+SELECT (SELECT user_uuid FROM foo),
+       (SELECT total_chests_looted FROM foo),
+       (SELECT party_uuid FROM bar),
+       (SELECT total_chests_looted FROM bar)
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION update_finished_supply_drop(message TEXT, supply_drop_id INTEGER)
+AS
+$$
+UPDATE supply_drops
+SET end_timestamp = NOW() AND win_message = message
+WHERE id = supply_drop_id
 $$
     LANGUAGE sql;
 
