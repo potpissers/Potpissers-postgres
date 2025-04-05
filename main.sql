@@ -2599,10 +2599,11 @@ WITH cte AS (SELECT id
              GROUP BY party_uuid
              ORDER BY total_chests_looted DESC
              LIMIT 1)
-SELECT (SELECT user_uuid FROM foo),
-       (SELECT total_chests_looted FROM foo),
+SELECT user_uuid,
+       total_chests_looted,
        (SELECT party_uuid FROM bar),
        (SELECT total_chests_looted FROM bar)
+FROM foo
 $$
     LANGUAGE sql;
 CREATE OR REPLACE FUNCTION update_finished_supply_drop(message TEXT, supply_drop_id INTEGER)
