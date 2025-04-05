@@ -2570,7 +2570,7 @@ SELECT (SELECT supply_drop_rounds.id
        1
 FROM cte
 WHERE isnt_expired
-ON CONFLICT (supply_drop_round_id, user_uuid) DO UPDATE SET chests_looted = chests_looted + 1
+ON CONFLICT (supply_drop_round_id, user_uuid) DO UPDATE SET chests_looted = supply_drops_rounds_item_data.chests_looted + 1
 $$
     LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_supply_drop_winner_data(supply_drop_id INTEGER)
@@ -2606,7 +2606,7 @@ SELECT user_uuid,
 FROM foo
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION update_finished_supply_drop(message TEXT, supply_drop_id INTEGER)
+CREATE OR REPLACE PROCEDURE update_finished_supply_drop(message TEXT, supply_drop_id INTEGER)
 AS
 $$
 UPDATE supply_drops
