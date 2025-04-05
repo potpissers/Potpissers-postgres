@@ -2477,11 +2477,10 @@ CREATE TABLE IF NOT EXISTS supply_drops
 );
 CREATE TABLE IF NOT EXISTS supply_drops_rounds
 (
+    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     supply_drop_id INTEGER,
-    id             INTEGER GENERATED ALWAYS AS IDENTITY UNIQUE,
     timestamp      TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (supply_drop_id) REFERENCES supply_drops (id) ON DELETE CASCADE,
-    PRIMARY KEY (supply_drop_id, id)
+    FOREIGN KEY (supply_drop_id) REFERENCES supply_drops (id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS supply_drops_rounds_item_data
 (
