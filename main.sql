@@ -741,7 +741,7 @@ $$
 WITH cte AS (
     DELETE
         FROM kits -- TODO -> handle cascade
-            WHERE kits.kit_name = delete_default_kit.kit_name)
+            WHERE kits.kit_name = delete_default_kit_return_remaining_names.kit_name)
 SELECT array_agg(kits.kit_name)
 FROM kits
 $$
