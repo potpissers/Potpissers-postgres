@@ -2479,6 +2479,7 @@ CREATE TABLE IF NOT EXISTS supply_drops_rounds
 (
     supply_drop_id INTEGER,
     id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    timestamp      TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (supply_drop_id) REFERENCES supply_drops (id) ON DELETE CASCADE,
     PRIMARY KEY (supply_drop_id, id)
 );
