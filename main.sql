@@ -734,6 +734,18 @@ VALUES (upsert_default_kit.kit_name, upsert_default_kit.bukkit_default_loadout)
 ON CONFLICT (kit_name) DO UPDATE SET bukkit_default_loadout = EXCLUDED.bukkit_default_loadout
 $$
     LANGUAGE sql;
+CREATE OR REPLACE FUNCTION delete_default_kit_return_remaining_names(kit_name TEXT)
+    RETURNS TEXT[]
+AS
+$$
+WITH cte AS (
+    DELETE
+        FROM kits -- TODO -> handle cascade
+            WHERE kits.kit_name = delete_default_kit.kit_name)
+SELECT array_agg(kits.kit_name)
+FROM kits
+$$
+    LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE update_default_kit_name(kit_name TEXT, server_id INTEGER)
 AS
 $$
@@ -2435,6 +2447,82 @@ WHERE servers.name = get_14_newest_server_koths.server_name
   AND end_timestamp IS NOT NULL
 ORDER BY end_timestamp IS NULL, end_timestamp
 LIMIT 14
+$$
+    LANGUAGE sql;
+
+CREATE TABLE IF NOT EXISTS supply_drops
+(
+    id                          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    server_id                   INTEGER     NOT NULL,
+    start_timestamp             TIMESTAMPTZ NOT NULL,
+
+    nullable_server_koth_id     INTEGER,
+    is_koth_movement_restricted BOOLEAN     NOT NULL,
+    world_name                  TEXT        NOT NULL,
+    x                           INTEGER     NOT NULL,
+    y                           INTEGER     NOT NULL,
+    z                           INTEGER     NOT NULL,
+    radius                      INTEGER     NOT NULL,
+    chest_open_timestamp        TIMESTAMPTZ NOT NULL,
+    loot_factor                 INTEGER     NOT NULL,
+    restock_timer               INTEGER     NOT NULL,
+    restock_amount              INTEGER     NOT NULL,
+
+    end_timestamp               TIMESTAMPTZ,
+    winning_party_uuid          UUID,
+    winning_player_uuid         UUID,
+    win_message                 TEXT,
+    FOREIGN KEY (nullable_server_koth_id) REFERENCES server_koths (id),
+    FOREIGN KEY (server_id) REFERENCES servers (id)
+);
+CREATE TABLE IF NOT EXISTS supply_drops_rounds
+(
+    supply_drop_id INTEGER,
+    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    FOREIGN KEY (supply_drop_id) REFERENCES supply_drops (id) ON DELETE CASCADE,
+    PRIMARY KEY (supply_drop_id, id)
+);
+CREATE TABLE IF NOT EXISTS supply_drops_rounds_item_data
+(
+    supply_drop_round_id INTEGER NOT NULL,
+    user_uuid            UUID    NOT NULL,
+    items_looted         INTEGER NOT NULL,
+    FOREIGN KEY (supply_drop_round_id) REFERENCES supply_drops_rounds (id) ON DELETE CASCADE,
+    PRIMARY KEY (supply_drop_round_id, user_uuid)
+);
+CREATE TABLE IF NOT EXISTS supply_drops_timestamps
+(
+    supply_drop_id INTEGER,
+    timestamp      TIMESTAMPTZ DEFAULT NOW(),
+    reason         TEXT NOT NULL,
+    FOREIGN KEY (supply_drop_id) REFERENCES supply_drops (id) ON DELETE CASCADE,
+    PRIMARY KEY (supply_drop_id, timestamp, reason)
+);
+CREATE OR REPLACE FUNCTION insert_supply_drop_return_data(server_id INTEGER,
+                                                          world_name TEXT,
+                                                          x INTEGER, y INTEGER, z INTEGER, radius INTEGER,
+                                                          chest_open_timestamp TIMESTAMPTZ, restock_timer INTEGER,
+                                                          restock_amount INTEGER,
+                                                          nullable_server_koth_id INTEGER,
+                                                          is_koth_movement_restricted BOOLEAN)
+    RETURNS SETOF supply_drops
+AS
+$$
+INSERT INTO supply_drops (server_id, start_timestamp, world_name, x, y, z, radius, chest_open_timestamp, loot_factor,
+                          restock_timer, restock_amount, nullable_server_koth_id, is_koth_movement_restricted)
+VALUES (insert_supply_drop_return_data.server_id, NOW(),
+        insert_supply_drop_return_data.world_name,
+        insert_supply_drop_return_data.x, insert_supply_drop_return_data.y,
+        insert_supply_drop_return_data.z, insert_supply_drop_return_data.radius,
+        insert_supply_drop_return_data.chest_open_timestamp,
+        (SELECT loot_factor
+         FROM server_data
+         WHERE server_data.server_id = insert_supply_drop_return_data.server_id),
+        insert_supply_drop_return_data.restock_timer,
+        insert_supply_drop_return_data.restock_amount,
+        insert_supply_drop_return_data.nullable_server_koth_id,
+        insert_supply_drop_return_data.is_koth_movement_restricted)
+RETURNING *
 $$
     LANGUAGE sql;
 
