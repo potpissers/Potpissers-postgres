@@ -2610,7 +2610,8 @@ CREATE OR REPLACE PROCEDURE update_finished_supply_drop(message TEXT, supply_dro
 AS
 $$
 UPDATE supply_drops
-SET end_timestamp = NOW() AND win_message = message
+SET end_timestamp = NOW(),
+    win_message   = message
 WHERE id = supply_drop_id
 $$
     LANGUAGE sql;
