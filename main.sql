@@ -2585,7 +2585,7 @@ AS
 $$
 WITH cte AS (SELECT id
              FROM supply_drop_rounds
-             WHERE supply_drop_rounds.supply_drop_id = upsert_supply_drop_return_data.supply_drop_id),
+             WHERE supply_drop_rounds.supply_drop_id = get_supply_drop_winner_data.supply_drop_id),
      foo AS (SELECT user_uuid, SUM(chests_looted) AS total_chests_looted
              FROM supply_drops_rounds_item_data
              WHERE supply_drop_round_id IN (SELECT id FROM cte)
