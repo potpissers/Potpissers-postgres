@@ -490,8 +490,6 @@ CREATE OR REPLACE FUNCTION get_server_datas()
                 dtr_max_time                      INTEGER,
                 dtr_off_peak_freeze_time          INTEGER,
                 off_peak_lives_needed_as_cents    INTEGER,
-                bard_radius                       INTEGER,
-                rogue_radius                      INTEGER,
                 "timestamp"                       TIMESTAMPTZ,
                 server_name                       TEXT,
                 attack_speed_name                 TEXT
