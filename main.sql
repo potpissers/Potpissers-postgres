@@ -510,8 +510,6 @@ SELECT death_ban_minutes,
        dtr_max_time,
        dtr_off_peak_freeze_time,
        off_peak_lives_needed_as_cents,
-       bard_radius,
-       rogue_radius,
        timestamp,
        servers.name,
        attack_speeds.name
