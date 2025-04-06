@@ -2539,7 +2539,7 @@ $$
 WITH _ AS (
     UPDATE supply_drop_rounds
         SET end_timestamp = NOW()
-        WHERE supply_drop_id = id
+        WHERE supply_drop_id = insert_supply_drop_round_data_return_data_if_continuing.id
             AND end_timestamp IS NULL)
 SELECT *
 FROM supply_drops
