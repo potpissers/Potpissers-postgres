@@ -2528,7 +2528,13 @@ $$
 CREATE OR REPLACE PROCEDURE insert_supply_drop_round(id INTEGER, bytes BYTEA)
 AS
 $$
-INSERT INTO supply_drop_rounds (supply_drop_id, java_chest_location_coordinates)
+WITH _ AS (
+    UPDATE supply_drop_rounds
+        SET end_timestamp = NOW()
+        WHERE supply_drop_id = insert_supply_drop_round.id
+            AND end_timestamp IS NULL)
+INSERT
+INTO supply_drop_rounds (supply_drop_id, java_chest_location_coordinates)
 VALUES (insert_supply_drop_round.id, bytes)
 $$
     LANGUAGE sql;
@@ -2536,11 +2542,6 @@ CREATE OR REPLACE FUNCTION insert_supply_drop_round_data_return_data_if_continui
     RETURNS SETOF supply_drops
 AS
 $$
-WITH _ AS (
-    UPDATE supply_drop_rounds
-        SET end_timestamp = NOW()
-        WHERE supply_drop_id = insert_supply_drop_round_data_return_data_if_continuing.id
-            AND end_timestamp IS NULL)
 SELECT *
 FROM supply_drops
 WHERE supply_drops.id = insert_supply_drop_round_data_return_data_if_continuing.id
