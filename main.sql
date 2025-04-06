@@ -351,8 +351,6 @@ CREATE TABLE IF NOT EXISTS server_data
     dtr_off_peak_freeze_time          INTEGER DEFAULT 480,
     dtr_peak_freeze_time              INTEGER DEFAULT 960,
     off_peak_lives_needed_as_cents    INTEGER DEFAULT 100,
-    bard_radius                       INTEGER DEFAULT 15,
-    rogue_radius                      INTEGER DEFAULT 5,
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
 );
 CREATE OR REPLACE FUNCTION upsert_server_return_data(game_mode_name TEXT, server_name TEXT)
@@ -379,8 +377,6 @@ CREATE OR REPLACE FUNCTION upsert_server_return_data(game_mode_name TEXT, server
                 dtr_off_peak_freeze_time          INTEGER,
                 dtr_peak_freeze_time              INTEGER,
                 off_peak_lives_needed_as_cents    INTEGER,
-                bard_radius                       INTEGER,
-                rogue_radius                      INTEGER,
 
                 attack_speed_name                 TEXT
             )
