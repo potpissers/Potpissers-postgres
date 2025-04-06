@@ -2288,7 +2288,7 @@ WITH cte AS (SELECT koths.id, name, max_timer
 UPDATE koths
 SET capping_user_uuid = user_uuid
 WHERE id = (SELECT id FROM cte)
-RETURNING (SELECT name, max_timer FROM cte)
+RETURNING (SELECT name FROM cte), (SELECT max_timer FROM cte)
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE update_knocked_koth_user_uuid(user_uuid UUID, server_koth_id INTEGER)
 AS
