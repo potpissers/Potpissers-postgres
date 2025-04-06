@@ -2270,7 +2270,7 @@ CREATE TABLE IF NOT EXISTS koths_timestamps
     FOREIGN KEY (koth_id) REFERENCES koths (id) ON DELETE CASCADE,
     PRIMARY KEY (koth_id, timestamp, reason)
 );
-CREATE OR REPLACE FUNCTION update_koths_capper_return_optional_name(server_koth_id INTEGER, user_uuid UUID)
+CREATE OR REPLACE FUNCTION update_koths_capper_return_optional_data(server_koth_id INTEGER, user_uuid UUID)
     RETURNS TABLE
             (
                 name      TEXT,
