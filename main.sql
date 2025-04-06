@@ -2271,10 +2271,14 @@ CREATE TABLE IF NOT EXISTS koths_timestamps
     PRIMARY KEY (koth_id, timestamp, reason)
 );
 CREATE OR REPLACE FUNCTION update_koths_capper_return_optional_name(server_koth_id INTEGER, user_uuid UUID)
-    RETURNS TEXT
+    RETURNS TABLE
+            (
+                name      TEXT,
+                max_timer INTEGER
+            )
 AS
 $$
-WITH cte AS (SELECT koths.id, name
+WITH cte AS (SELECT koths.id, name, max_timer
              FROM koths
                       JOIN server_koths ON koths.server_koths_id = server_koths.id
                       JOIN arena_data ON server_koths.arena_id = arena_data.id
@@ -2284,7 +2288,7 @@ WITH cte AS (SELECT koths.id, name
 UPDATE koths
 SET capping_user_uuid = user_uuid
 WHERE id = (SELECT id FROM cte)
-RETURNING (SELECT name FROM cte)
+RETURNING (SELECT name, max_timer FROM cte)
 $$ LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE update_knocked_koth_user_uuid(user_uuid UUID, server_koth_id INTEGER)
 AS
