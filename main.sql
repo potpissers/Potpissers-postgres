@@ -2049,14 +2049,15 @@ WHERE revives.reviver_user_uuid = get_user_game_mode_lives_as_cents.user_uuid
   AND server_id IN
       (SELECT id FROM servers WHERE servers.game_mode_name = get_user_game_mode_lives_as_cents.game_mode_name)
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_in_cents_if_successful(reviver_uuid UUID,
+CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_in_cents_if_successful(game_mode_name TEXT,
+                                                                                     reviver_uuid UUID,
                                                                                      revived_uuid UUID,
                                                                                      server_id INTEGER,
                                                                                      reason TEXT)
-    RETURNS INTEGER
+    RETURNS INTEGER -- TODO -> this should get the server id by itself
 AS
 $$
-WITH cte AS (SELECT get_user_game_mode_lives_as_cents(reviver_uuid) AS current_lives_as_cents),
+WITH cte AS (SELECT get_user_game_mode_lives_as_cents(reviver_uuid, game_mode_name) AS current_lives_as_cents),
      bar
          AS (SELECT off_peak_lives_needed_as_cents * CASE
                                                          WHEN get_is_koth_active(handle_insert_revive_return_result_in_cents_if_successful.server_id)
