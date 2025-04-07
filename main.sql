@@ -250,6 +250,19 @@ CREATE TABLE IF NOT EXISTS servers -- the current servers table is altered to ma
     timestamp      TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (game_mode_name, name)
 );
+CREATE OR REPLACE FUNCTION get_nullable_game_mode_name_current_server_id(game_mode_name TEXT)
+    RETURNS INTEGER
+AS
+$$
+SELECT id
+FROM servers
+         JOIN server_data ON servers.id = server_data.server_id
+WHERE servers.game_mode_name = get_nullable_game_mode_name_current_server_id.game_mode_name
+  AND NOT is_initially_whitelisted
+ORDER BY timestamp DESC
+LIMIT 1
+$$
+    LANGUAGE sql;
 
 CREATE UNLOGGED TABLE IF NOT EXISTS online_players
 (
@@ -2019,18 +2032,22 @@ $$
 INSERT INTO revives (revived_user_uuid, server_id, reason, reviver_user_uuid, life_cost_in_cents)
 VALUES (revived_uuid, insert_revive.server_id, insert_revive.reason, reviver_uuid, 0)
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_user_hcf_lives_as_cents(user_uuid UUID)
+CREATE OR REPLACE FUNCTION get_user_game_mode_lives_as_cents(user_uuid UUID, game_mode_name TEXT)
     RETURNS INTEGER
 AS
 $$
-WITH cte AS (SELECT COALESCE(SUM(line_item_quantity), 0) * 100
-                        AS purchased_lives_as_cents
-             FROM successful_transactions
-             WHERE successful_transactions.user_uuid = get_user_hcf_lives_as_cents.user_uuid
-               AND line_item_id = '0') -- hcf-life
-SELECT (SELECT purchased_lives_as_cents FROM cte) - COALESCE(SUM(revives.life_cost_in_cents), 0)
+SELECT (SELECT COALESCE(SUM(line_item_quantity), 0) * 100
+                   AS purchased_lives_as_cents
+        FROM successful_transactions
+        WHERE successful_transactions.user_uuid = get_user_game_mode_lives_as_cents.user_uuid
+          AND line_item_id = (SELECT id
+                              FROM line_items
+                              WHERE line_items.game_mode_name = get_user_game_mode_lives_as_cents.game_mode_name
+                                AND line_item_name = 'life')) - COALESCE(SUM(revives.life_cost_in_cents), 0)
 FROM revives
-WHERE revives.reviver_user_uuid = get_user_hcf_lives_as_cents.user_uuid
+WHERE revives.reviver_user_uuid = get_user_game_mode_lives_as_cents.user_uuid
+  AND server_id IN
+      (SELECT id FROM servers WHERE servers.game_mode_name = get_user_game_mode_lives_as_cents.game_mode_name)
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_in_cents_if_successful(reviver_uuid UUID,
                                                                                      revived_uuid UUID,
@@ -2039,7 +2056,7 @@ CREATE OR REPLACE FUNCTION handle_insert_revive_return_result_in_cents_if_succes
     RETURNS INTEGER
 AS
 $$
-WITH cte AS (SELECT get_user_hcf_lives_as_cents(reviver_uuid) AS current_lives_as_cents),
+WITH cte AS (SELECT get_user_game_mode_lives_as_cents(reviver_uuid) AS current_lives_as_cents),
      bar
          AS (SELECT off_peak_lives_needed_as_cents * CASE
                                                          WHEN get_is_koth_active(handle_insert_revive_return_result_in_cents_if_successful.server_id)
