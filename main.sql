@@ -872,6 +872,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS punishment_types
     id   INTEGER PRIMARY KEY,
     name TEXT NOT NULL
 );
+INSERT INTO punishment_types (id, name)
 VALUES (0, 'ban'),
        (1, 'mute'),
        (2, '7cps');
