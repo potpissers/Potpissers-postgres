@@ -50,6 +50,8 @@ VALUES ('potpissers', 'piglin combat logger',
         'netherite armor is equal to diamond armor in pvp if the attack is from a netherite sword/trident/mace, or if the attack isn''t melee'),
        ('potpissers', 'netherite sword pvp nerf',
         'when attacking non-netherite players: diamond and netherite swords are equal damage. when attacking netherite players: netherite swords reduce netherite armor''s protection level to diamond'),
+       ('potpissers', 'slow-falling debuff nerf',
+        'extended splash slow-falling''s duration has been reduced to 16 seconds'),
 
        ('cubecore', 'faction fight protection',
         'depending on the fight, cleaning is only possible if the cleaner''s numbers are greater than one side of the fight. use /f anticlean (off, on, allies)'),
