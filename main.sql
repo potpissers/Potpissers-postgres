@@ -1971,6 +1971,12 @@ WHERE user_deaths.victim_uuid = get_farthest_user_death_ban.victim_uuid
   AND user_deaths.server_id = get_farthest_user_death_ban.server_id
   AND expiration > NOW()
   AND NOT is_ip_only
+  AND timestamp > COALESCE((SELECT timestamp
+                            FROM revives
+                            WHERE revived_user_uuid = get_farthest_user_death_ban.victim_uuid
+                              AND revives.server_id = get_farthest_user_death_ban.server_id
+                            ORDER BY timestamp DESC
+                            LIMIT 1), '-infinity'::timestamptz)
 ORDER BY expiration DESC
 LIMIT 1
 $$ LANGUAGE sql;
@@ -2038,6 +2044,14 @@ WHERE victim_uuid != user_uuid
                   FROM ip_exempt_uuids
                   WHERE ip_exempt_uuids.user_uuid = get_farthest_user_ip_deathban.user_uuid
                     AND ip_exempt_uuids.server_id = get_farthest_user_ip_deathban.server_id))
+  AND expiration > NOW()
+  AND timestamp > COALESCE((SELECT revives.timestamp
+                            FROM revives
+                                     JOIN user_deaths ON victim_uuid = revived_user_uuid
+                            WHERE revived_user_uuid = user_deaths.victim_uuid
+                              AND revives.server_id = get_farthest_user_ip_deathban.server_id
+                            ORDER BY timestamp DESC
+                            LIMIT 1), '-infinity'::timestamptz) -- TODO -> this requires ip death-ban's to revive the victim directly, which is fine for now
 ORDER BY expiration DESC
 LIMIT 1
 $$ LANGUAGE sql;
