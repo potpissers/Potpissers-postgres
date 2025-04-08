@@ -282,6 +282,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS online_players
     user_uuid      UUID PRIMARY KEY,
     user_name      TEXT NOT NULL,
     game_mode_name TEXT NOT NULL,
+    server_name    TEXT NOT NULL,
     faction_uuid   UUID, -- TODO,
     network_join   TIMESTAMPTZ DEFAULT NOW(),
     server_join    TIMESTAMPTZ DEFAULT NOW()
