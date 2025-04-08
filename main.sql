@@ -178,12 +178,25 @@ SELECT COALESCE((SELECT name
                  LIMIT 1), 'default');
 $$
     LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE insert_user_hcf_life(user_uuid UUID, user_name TEXT, amount INTEGER)
+CREATE OR REPLACE PROCEDURE insert_user_free_successful_transaction(user_uuid UUID, game_mode_name TEXT,
+                                                                    line_item_name TEXT,
+                                                                    user_name TEXT)
 AS
 $$
-INSERT INTO successful_transactions (user_uuid, line_item_id, line_item_player_name,
-                                     line_item_quantity, amount_as_cents)
-VALUES (insert_user_hcf_life.user_uuid, '0', user_name, amount, 0)
+WITH cte AS (SELECT id
+             FROM line_items
+             WHERE line_items.game_mode_name = insert_user_free_successful_transaction.game_mode_name
+               AND line_items.line_item_name = insert_user_free_successful_transaction.line_item_name)
+INSERT
+INTO successful_transactions (user_uuid, line_item_id, line_item_player_name,
+                              line_item_quantity, amount_as_cents)
+SELECT insert_user_free_successful_transaction.user_uuid,
+       id,
+       insert_user_free_successful_transaction.user_name,
+       1,
+       0
+FROM cte
+WHERE EXISTS(SELECT * FROM cte)
 $$
     LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_unsuccessful_transactions(order_ids TEXT[])
@@ -2051,7 +2064,8 @@ WHERE victim_uuid != user_uuid
                             WHERE revived_user_uuid = user_deaths.victim_uuid
                               AND revives.server_id = get_farthest_user_ip_deathban.server_id
                             ORDER BY timestamp DESC
-                            LIMIT 1), '-infinity'::timestamptz) -- TODO -> this requires ip death-ban's to revive the victim directly, which is fine for now
+                            LIMIT 1),
+                           '-infinity'::timestamptz) -- TODO -> this requires ip death-ban's to revive the victim directly, which is fine for now
 ORDER BY expiration DESC
 LIMIT 1
 $$ LANGUAGE sql;
