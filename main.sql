@@ -949,6 +949,29 @@ WHERE user_punishments.user_uuid != get_farthest_user_ip_punishment.user_uuid
 ORDER BY expiration DESC
 LIMIT 1
 $$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION reduce_user_punishments_by_type_returning_star(user_uuid UUID, server_id INTEGER, punishment_name TEXT)
+    RETURNS SETOF user_punishments
+AS
+$$
+UPDATE user_punishments
+SET expiration = NOW()
+WHERE user_punishments.user_uuid = reduce_user_punishments_by_type_returning_star.user_uuid
+  AND user_punishments.server_id = reduce_user_punishments_by_type_returning_star.server_id
+  AND punishment_type_id = (SELECT id FROM punishment_types WHERE name = punishment_name)
+RETURNING *
+$$ LANGUAGE sql;
+CREATE OR REPLACE FUNCTION reduce_user_punishments_by_type_by_length_returning_star(user_uuid UUID, server_id INTEGER, punishment_name TEXT, length_minutes INTEGER)
+    RETURNS SETOF user_punishments
+AS
+$$
+UPDATE user_punishments
+SET expiration = NOW()
+WHERE user_punishments.user_uuid = reduce_user_punishments_by_type_by_length_returning_star.user_uuid
+  AND user_punishments.server_id = reduce_user_punishments_by_type_by_length_returning_star.server_id
+  AND punishment_type_id = (SELECT id FROM punishment_types WHERE name = punishment_name)
+  AND expiration BETWEEN NOW() AND NOW() + length_minutes * INTERVAL '1 minute'
+RETURNING *
+$$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS party_invites
 (
