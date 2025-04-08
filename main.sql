@@ -714,7 +714,7 @@ WITH cte
          FROM ip_exempt_uuids
              WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
                  AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id
-                 AND (SELECT existed FROM cte))
+                 AND EXISTS (SELECT 1 FROM cte WHERE existed = true))
 SELECT existed
 FROM cte
 $$ LANGUAGE sql;
