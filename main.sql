@@ -292,13 +292,14 @@ CREATE OR REPLACE FUNCTION get_online_players()
                 user_uuid      UUID,
                 user_name      TEXT,
                 game_mode_name TEXT,
+                server_name    TEXT,
                 faction_uuid   UUID,
                 network_join   TIMESTAMPTZ,
                 server_join    TIMESTAMPTZ
             )
 AS
 $$
-SELECT user_uuid, user_name, game_mode_name, faction_uuid, network_join, server_join
+SELECT user_uuid, user_name, game_mode_name, server_name, faction_uuid, network_join, server_join
 FROM online_players
 $$
     LANGUAGE sql;
