@@ -709,13 +709,14 @@ CREATE OR REPLACE FUNCTION toggle_is_user_ip_exempt_return_result(user_uuid UUID
 $$
 WITH cte
          AS (INSERT INTO ip_exempt_uuids (user_uuid, server_id) VALUES (toggle_is_user_ip_exempt_return_result.user_uuid,
-                                                                        toggle_is_user_ip_exempt_return_result.server_id) ON CONFLICT (user_uuid, server_id) DO UPDATE SET user_uuid = EXCLUDED.user_uuid RETURNING XMAX <> 0 AS exists)
-DELETE
-FROM ip_exempt_uuids
-WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
-  AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id
-  AND (SELECT exists FROM cte)
-RETURNING (SELECT exists FROM cte)
+                                                                        toggle_is_user_ip_exempt_return_result.server_id) ON CONFLICT (user_uuid, server_id) DO UPDATE SET user_uuid = EXCLUDED.user_uuid RETURNING XMAX <> 0 AS exists),
+     _ AS (DELETE
+         FROM ip_exempt_uuids
+             WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
+                 AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id
+                 AND (SELECT exists FROM cte))
+SELECT exists
+FROM cte
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS kits
@@ -960,7 +961,9 @@ WHERE user_punishments.user_uuid = reduce_user_punishments_by_type_returning_sta
   AND punishment_type_id = (SELECT id FROM punishment_types WHERE name = punishment_name)
 RETURNING *
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION reduce_user_punishments_by_type_by_length_returning_star(user_uuid UUID, server_id INTEGER, punishment_name TEXT, length_minutes INTEGER)
+CREATE OR REPLACE FUNCTION reduce_user_punishments_by_type_by_length_returning_star(user_uuid UUID, server_id INTEGER,
+                                                                                    punishment_name TEXT,
+                                                                                    length_minutes INTEGER)
     RETURNS SETOF user_punishments
 AS
 $$
