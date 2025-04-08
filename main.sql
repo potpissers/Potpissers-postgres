@@ -709,13 +709,13 @@ CREATE OR REPLACE FUNCTION toggle_is_user_ip_exempt_return_result(user_uuid UUID
 $$
 WITH cte
          AS (INSERT INTO ip_exempt_uuids (user_uuid, server_id) VALUES (toggle_is_user_ip_exempt_return_result.user_uuid,
-                                                                        toggle_is_user_ip_exempt_return_result.server_id) ON CONFLICT (user_uuid, server_id) DO UPDATE SET user_uuid = EXCLUDED.user_uuid RETURNING XMAX <> 0 AS exists),
+                                                                        toggle_is_user_ip_exempt_return_result.server_id) ON CONFLICT (user_uuid, server_id) DO UPDATE SET user_uuid = EXCLUDED.user_uuid RETURNING XMAX <> 0 AS existed),
      _ AS (DELETE
          FROM ip_exempt_uuids
              WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
                  AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id
-                 AND (SELECT exists FROM cte))
-SELECT exists
+                 AND NOT (SELECT existed FROM cte))
+SELECT existed
 FROM cte
 $$ LANGUAGE sql;
 
