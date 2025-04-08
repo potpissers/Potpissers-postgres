@@ -715,8 +715,10 @@ WITH cte
              WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
                  AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id
                  AND NOT (SELECT existed FROM cte))
-SELECT existed
-FROM cte
+SELECT EXISTS(SELECT *
+              FROM ip_exempt_uuids
+              WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
+                AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id)
 $$ LANGUAGE sql;
 
 CREATE TABLE IF NOT EXISTS kits
