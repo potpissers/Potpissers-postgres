@@ -279,36 +279,36 @@ $$
 
 CREATE UNLOGGED TABLE IF NOT EXISTS online_players
 (
-    user_uuid    UUID PRIMARY KEY,
-    user_name    TEXT NOT NULL,
-    server_name  TEXT NOT NULL,
-    faction_uuid UUID, -- TODO,
-    network_join TIMESTAMPTZ DEFAULT NOW(),
-    server_join  TIMESTAMPTZ DEFAULT NOW()
+    user_uuid      UUID PRIMARY KEY,
+    user_name      TEXT NOT NULL,
+    game_mode_name TEXT NOT NULL,
+    faction_uuid   UUID, -- TODO,
+    network_join   TIMESTAMPTZ DEFAULT NOW(),
+    server_join    TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE OR REPLACE FUNCTION get_online_players()
     RETURNS TABLE
             (
-                user_uuid    UUID,
-                user_name    TEXT,
-                server_name  TEXT,
-                faction_uuid UUID,
-                network_join TIMESTAMPTZ,
-                server_join  TIMESTAMPTZ
+                user_uuid      UUID,
+                user_name      TEXT,
+                game_mode_name TEXT,
+                faction_uuid   UUID,
+                network_join   TIMESTAMPTZ,
+                server_join    TIMESTAMPTZ
             )
 AS
 $$
-SELECT user_uuid, user_name, servers.name, faction_uuid, network_join, server_join
+SELECT user_uuid, user_name, game_mode_name, faction_uuid, network_join, server_join
 FROM online_players
-         JOIN servers ON server_name = name
 $$
     LANGUAGE sql;
-CREATE OR REPLACE PROCEDURE handle_upsert_online_player(user_uuid UUID, user_name TEXT, server_name TEXT, faction_uuid UUID)
+CREATE OR REPLACE PROCEDURE handle_upsert_online_player(user_uuid UUID, user_name TEXT, game_mode_name TEXT,
+                                                        faction_uuid UUID)
 AS
 $$
 WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_players.user_uuid, 'name',
-                                                                 online_players.user_name, 'server_name',
-                                                                 online_players.server_name,
+                                                                 online_players.user_name, 'game_mode_name',
+                                                                 online_players.game_mode_name,
                                                                  'active_faction', online_players.faction_uuid,
                                                                  'network_join', network_join, 'server_join',
                                                                  server_join)::TEXT
@@ -318,16 +318,16 @@ WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_
                         FROM online_players
                         WHERE online_players.user_uuid = handle_upsert_online_player.user_uuid)),
      cte AS (INSERT
-         INTO online_players (user_uuid, user_name, server_name, faction_uuid)
+         INTO online_players (user_uuid, user_name, game_mode_name, faction_uuid)
              VALUES (handle_upsert_online_player.user_uuid, handle_upsert_online_player.user_name,
-                     handle_upsert_online_player.server_name, handle_upsert_online_player.faction_uuid)
+                     handle_upsert_online_player.game_mode_name, handle_upsert_online_player.faction_uuid)
              ON CONFLICT (user_uuid) DO UPDATE SET user_name = EXCLUDED.user_name,
-                 server_name = EXCLUDED.server_name,
+                 game_mode_name = EXCLUDED.game_mode_name,
                  faction_uuid = EXCLUDED.faction_uuid,
                  server_join = NOW() RETURNING *)
 SELECT pg_notify('online', (SELECT json_build_object('uuid', cte.user_uuid,
-                                                     'name', cte.user_name, 'server_name',
-                                                     cte.server_name,
+                                                     'name', cte.user_name, 'game_mode_name',
+                                                     cte.game_mode_name,
                                                      'active_faction',
                                                      cte.faction_uuid,
                                                      'network_join',
@@ -345,8 +345,8 @@ WITH cte AS (DELETE
         WHERE online_players.user_uuid = handle_delete_online_player.user_uuid
         RETURNING *)
 SELECT pg_notify('offline', (SELECT json_build_object('uuid', cte.user_uuid, 'name',
-                                                      user_name, 'server_name',
-                                                      server_name,
+                                                      user_name, 'game_mode_name',
+                                                      game_mode_name,
                                                       'active_faction', faction_uuid,
                                                       'network_join', network_join, 'server_join',
                                                       server_join)::TEXT
@@ -517,7 +517,8 @@ CREATE OR REPLACE FUNCTION get_server_datas()
                 "timestamp"                       TIMESTAMPTZ,
                 server_name                       TEXT,
                 game_mode_name                    TEXT,
-                attack_speed_name                 TEXT
+                attack_speed_name                 TEXT,
+                is_initially_whitelisted          BOOLEAN
             )
 AS
 $$
@@ -536,7 +537,8 @@ SELECT death_ban_minutes,
        timestamp,
        servers.name,
        game_mode_name,
-       attack_speeds.name
+       attack_speeds.name,
+       server_data.is_initially_whitelisted
 FROM server_data
          JOIN servers ON id = server_id
          JOIN attack_speeds ON attack_speed_id = attack_speeds.id
@@ -1386,7 +1388,7 @@ FROM current_factions_members
          JOIN factions ON current_factions_members.faction_id = factions.id
 WHERE party_uuid = faction_uuid
 $$ LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_7_factions(server_name TEXT)
+CREATE OR REPLACE FUNCTION get_7_factions(game_mode_name TEXT, server_name TEXT)
     RETURNS TABLE
             (
                 name                       TEXT,
@@ -1401,7 +1403,8 @@ SELECT factions.name, party_uuid, frozen_until, current_max_dtr, current_regen_a
 FROM factions
          JOIN servers ON factions.server_id = servers.id
          JOIN LATERAL get_dtr_data(servers.id, party_uuid) ON TRUE
-WHERE servers.name = server_name
+WHERE servers.game_mode_name = get_7_factions.game_mode_name
+  AND servers.name = server_name
 LIMIT 7
 $$
     LANGUAGE sql;
@@ -1751,6 +1754,7 @@ CREATE TABLE IF NOT EXISTS user_deaths
 CREATE OR REPLACE FUNCTION get_12_latest_network_deaths()
     RETURNS TABLE
             (
+                game_mode_name          TEXT,
                 name                    TEXT,
                 victim_user_fight_id    INTEGER,
                 "timestamp"             TIMESTAMPTZ,
@@ -1767,7 +1771,8 @@ CREATE OR REPLACE FUNCTION get_12_latest_network_deaths()
             )
 AS
 $$
-SELECT name,
+SELECT servers.game_mode_name,
+       name,
        victim_user_fight_id,
        user_deaths.timestamp,
        victim_uuid,
@@ -1786,9 +1791,10 @@ ORDER BY timestamp DESC
 LIMIT 12
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_12_latest_server_deaths(server_name TEXT)
+CREATE OR REPLACE FUNCTION get_12_latest_server_deaths(game_mode_name TEXT, server_name TEXT)
     RETURNS TABLE
             (
+                game_mode_name          TEXT,
                 name                    TEXT,
                 victim_user_fight_id    INTEGER,
                 "timestamp"             TIMESTAMPTZ,
@@ -1805,7 +1811,8 @@ CREATE OR REPLACE FUNCTION get_12_latest_server_deaths(server_name TEXT)
             )
 AS
 $$
-SELECT name,
+SELECT servers.game_mode_name,
+       name,
        victim_user_fight_id,
        user_deaths.timestamp,
        victim_uuid,
@@ -1820,7 +1827,8 @@ SELECT name,
        bukkit_killer_inventory
 FROM user_deaths
          JOIN servers ON user_deaths.server_id = servers.id
-WHERE name = server_name
+WHERE servers.game_mode_name = get_12_latest_server_deaths.game_mode_name
+  AND name = server_name
 ORDER BY timestamp DESC
 LIMIT 12
 $$
@@ -1890,7 +1898,7 @@ CREATE TABLE IF NOT EXISTS bandits
     FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE,
     FOREIGN KEY (death_id) REFERENCES user_deaths (id) ON DELETE CASCADE
 );
-CREATE OR REPLACE FUNCTION get_7_newest_bandits(server_name TEXT)
+CREATE OR REPLACE FUNCTION get_7_newest_bandits(game_mode_name TEXT, server_name TEXT)
     RETURNS TABLE
             (
                 user_uuid            UUID,
@@ -1909,7 +1917,8 @@ SELECT user_uuid,
 FROM bandits
          JOIN user_deaths on bandits.death_id = user_deaths.id
          JOIN servers ON user_deaths.server_id = servers.id
-WHERE name = server_name
+WHERE servers.game_mode_name = get_7_newest_bandits.game_mode_name
+  AND name = server_name
 ORDER BY user_deaths.timestamp DESC
 LIMIT 7
 $$
@@ -2434,6 +2443,7 @@ CREATE OR REPLACE FUNCTION get_14_newest_network_koths()
                 x                      INTEGER,
                 y                      INTEGER,
                 z                      INTEGER,
+                game_mode_name         TEXT,
                 server_name            TEXT,
                 arena_name             TEXT,
                 creator                TEXT
@@ -2454,6 +2464,7 @@ SELECT server_koths_id,
        x,
        y,
        z,
+       game_mode_name,
        servers.name                                                   AS server_name,
        arena_data.name                                                AS arena_name,
        creator
@@ -2466,7 +2477,7 @@ ORDER BY end_timestamp
 LIMIT 14
 $$
     LANGUAGE sql;
-CREATE OR REPLACE FUNCTION get_14_newest_server_koths(server_name TEXT)
+CREATE OR REPLACE FUNCTION get_14_newest_server_koths(game_mode_name TEXT, server_name TEXT)
     RETURNS TABLE
             (
                 server_koths_id        INTEGER,
@@ -2482,10 +2493,10 @@ CREATE OR REPLACE FUNCTION get_14_newest_server_koths(server_name TEXT)
                 x                      INTEGER,
                 y                      INTEGER,
                 z                      INTEGER,
+                game_mode_name         TEXT,
                 server_name            TEXT,
                 arena_name             TEXT,
                 creator                TEXT
-
             )
 AS
 $$
@@ -2502,6 +2513,7 @@ SELECT server_koths_id,
        x,
        y,
        z,
+       game_mode_name,
        servers.name                                                   AS server_name,
        arena_data.name                                                AS arena_name,
        creator
@@ -2509,7 +2521,8 @@ FROM koths
          JOIN server_koths ON server_koths_id = server_koths.id
          JOIN servers ON servers.id = server_koths.server_id
          JOIN arena_data ON arena_data.id = server_koths.arena_id
-WHERE servers.name = get_14_newest_server_koths.server_name
+WHERE servers.game_mode_name = get_14_newest_server_koths.game_mode_name
+  AND servers.name = get_14_newest_server_koths.server_name
   AND end_timestamp IS NOT NULL
 ORDER BY end_timestamp IS NULL, end_timestamp
 LIMIT 14
