@@ -714,7 +714,7 @@ DELETE
 FROM ip_exempt_uuids
 WHERE ip_exempt_uuids.user_uuid = toggle_is_user_ip_exempt_return_result.user_uuid
   AND ip_exempt_uuids.server_id = toggle_is_user_ip_exempt_return_result.server_id
-  AND EXISTS (SELECT exists FROM cte WHERE exists = TRUE)
+  AND (SELECT exists FROM cte)
 RETURNING (SELECT exists FROM cte)
 $$ LANGUAGE sql;
 
