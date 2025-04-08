@@ -513,11 +513,10 @@ CREATE OR REPLACE FUNCTION get_server_datas()
                 is_bard_passive_debuffing_enabled BOOLEAN,
                 dtr_freeze_timer                  INTEGER,
                 dtr_max                           REAL,
-                dtr_max_time                      INTEGER,
-                dtr_off_peak_freeze_time          INTEGER,
                 off_peak_lives_needed_as_cents    INTEGER,
                 "timestamp"                       TIMESTAMPTZ,
                 server_name                       TEXT,
+                game_mode_name                    TEXT,
                 attack_speed_name                 TEXT
             )
 AS
@@ -533,11 +532,10 @@ SELECT death_ban_minutes,
        is_bard_passive_debuffing_enabled,
        dtr_freeze_timer,
        dtr_max,
-       dtr_max_time,
-       dtr_off_peak_freeze_time,
        off_peak_lives_needed_as_cents,
        timestamp,
        servers.name,
+       game_mode_name,
        attack_speeds.name
 FROM server_data
          JOIN servers ON id = server_id
