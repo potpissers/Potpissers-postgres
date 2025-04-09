@@ -2010,7 +2010,7 @@ CREATE TABLE IF NOT EXISTS current_deathbans
     java_hmac_ip BYTEA, -- TODO not null ?
     FOREIGN KEY (deathban_id) REFERENCES deathbans (death_id) ON DELETE CASCADE
 );
-CREATE OR REPLACE FUNCTION handle_insert_deathban_return_duration_data_if_inserted(server_id INTEGER,
+CREATE OR REPLACE FUNCTION handle_insert_deathban_return_duration_data_if_inserted(user_uuid UUID, server_id INTEGER,
                                                                                    user_seconds_played INTEGER,
                                                                                    death_id INTEGER, ip_bytes BYTEA)
     RETURNS TABLE
@@ -2022,11 +2022,25 @@ CREATE OR REPLACE FUNCTION handle_insert_deathban_return_duration_data_if_insert
 AS
 $$
 DECLARE
-    death_ban_seconds   INTEGER;
-    is_ip_only          BOOLEAN;
-    deathban_expiration TIMESTAMPTZ;
+    hcf_donation_rank_if_hcf TEXT;
+    death_ban_seconds        INTEGER;
+    is_ip_only               BOOLEAN;
+    deathban_expiration      TIMESTAMPTZ;
 BEGIN
-    SELECT LEAST(death_ban_minutes * 60, user_seconds_played), is_ip_deathban_else_full
+    IF (SELECT game_mode_name FROM servers WHERE id = server_id) = 'hcf' THEN
+        SELECT get_donation_rank(user_uuid, 'hcf')
+        INTO hcf_donation_rank_if_hcf;
+    END IF;
+
+    SELECT LEAST(death_ban_minutes * 60, user_seconds_played) *
+           CASE hcf_donation_rank_if_hcf
+               WHEN 'default' THEN 1
+               WHEN 'basic' THEN .8
+               WHEN 'gold' THEN .6
+               WHEN 'diamond' THEN .4
+               WHEN 'ruby' THEN .2
+               ELSE 1 END,
+           is_ip_deathban_else_full
     INTO death_ban_seconds, is_ip_only
     FROM server_data
     WHERE server_data.server_id =
