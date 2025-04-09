@@ -318,7 +318,8 @@ AS
 $$
 WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_players.user_uuid, 'name',
                                                                  online_players.user_name, 'game_mode_name',
-                                                                 online_players.game_mode_name,
+                                                                 online_players.game_mode_name, 'server_name',
+                                                                 online_players.server_name,
                                                                  'active_faction', online_players.faction_uuid,
                                                                  'network_join', network_join, 'server_join',
                                                                  server_join)::TEXT
