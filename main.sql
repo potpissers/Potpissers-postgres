@@ -506,6 +506,7 @@ CREATE OR REPLACE FUNCTION get_server_datas()
             (
                 death_ban_minutes                 INTEGER,
                 world_border_radius               INTEGER,
+                default_koth_loot_factor          INTEGER,
                 sharpness_limit                   INTEGER,
                 power_limit                       INTEGER,
                 protection_limit                  INTEGER,
@@ -526,6 +527,7 @@ AS
 $$
 SELECT death_ban_minutes,
        world_border_radius,
+       default_koth_loot_factor,
        sharpness_limit,
        power_limit,
        protection_limit,
