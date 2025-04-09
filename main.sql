@@ -277,6 +277,13 @@ LIMIT 1
 $$
     LANGUAGE sql;
 
+CREATE UNLOGGED TABLE IF NOT EXISTS web_chat_history
+(
+    user_uuid UUID,
+    message   TEXT,
+    server_id INTEGER REFERENCES servers (id)
+);
+
 CREATE UNLOGGED TABLE IF NOT EXISTS online_players
 (
     user_uuid      UUID PRIMARY KEY,
@@ -305,6 +312,7 @@ FROM online_players
 $$
     LANGUAGE sql;
 CREATE OR REPLACE PROCEDURE handle_upsert_online_player(user_uuid UUID, user_name TEXT, game_mode_name TEXT,
+                                                        server_name TEXT,
                                                         faction_uuid UUID)
 AS
 $$
@@ -320,9 +328,10 @@ WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_
                         FROM online_players
                         WHERE online_players.user_uuid = handle_upsert_online_player.user_uuid)),
      cte AS (INSERT
-         INTO online_players (user_uuid, user_name, game_mode_name, faction_uuid)
+         INTO online_players (user_uuid, user_name, game_mode_name, server_name, faction_uuid)
              VALUES (handle_upsert_online_player.user_uuid, handle_upsert_online_player.user_name,
-                     handle_upsert_online_player.game_mode_name, handle_upsert_online_player.faction_uuid)
+                     handle_upsert_online_player.game_mode_name, handle_upsert_online_player.server_name,
+                     handle_upsert_online_player.faction_uuid)
              ON CONFLICT (user_uuid) DO UPDATE SET user_name = EXCLUDED.user_name,
                  game_mode_name = EXCLUDED.game_mode_name,
                  faction_uuid = EXCLUDED.faction_uuid,
