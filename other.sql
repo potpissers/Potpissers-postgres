@@ -53,6 +53,11 @@ VALUES ('potpissers', 'piglin combat logger',
        ('potpissers', 'slow-falling debuff nerf',
         'extended splash slow-falling''s duration has been reduced to 16 seconds'),
 
+       ('potpissers-commands', '/party', 'network-wide parties for communication'),
+       ('potpissers-commands', '/logout', 'starts a safe logout timer, avoiding the combat logger spawning'),
+       ('potpissers-commands', '/helpop', 'alert-messages staff'),
+       ('potpissers-commands', '/chat', 'changes your current chat channel'),
+
        ('cubecore', 'faction fight protection',
         'depending on the fight, cleaning is only possible if the cleaner''s numbers are greater than one side of the fight. use /f anticlean (off, on, allies)'),
        ('cubecore', 'cubecore looting',
@@ -95,6 +100,11 @@ VALUES ('potpissers', 'piglin combat logger',
         'there are recipes for heavy core, elytra, totem, grapple, trident, smithing template, netherite repair brick, enchanted totem, reverted enchanted golden apple, antidote honey, antidote milk and a few more things at spawn'),
        ('cubecore', 'cubecore exp bottles',
         'exp bottle xp has been buffed to match the looting enchantment exp increase'),
+
+--        ('cubecore-commands', '/faction', ''),
+       ('cubecore-commands', '/stuck', 'starts a timer that will teleport you out of player-claimed land'),
+       ('cubecore-commands', '/hcflives', 'checks your currently available hcf-lives'),
+       ('cubecore-commands', '/hcfrevive', 'revives deathbanned player using your hcf-lives, if available'),
 
        ('cubecore_classes',
         'class items: right click to activate, hold item or attack players to accelerate cooldown + activate hold effects if item has them', '- sugar: speed. miner @ 150 diamonds + all other classes
@@ -169,7 +179,11 @@ VALUES ('potpissers', 'piglin combat logger',
        ('kollusion', 'kollusion instant health + golden apple buff',
         'instant health potions and golden apples has been buffed to 1.6 minecraft''s levels, +50%'),
        ('kollusion', 'kollusion speed potions/other rare consumables',
-        'speed potions and other brewable potions/rare consumables all share the same cooldown');
+        'speed potions and other brewable potions/rare consumables all share the same cooldown'),
+
+       ('kollusion-commands', '/mzspawn', 'when used from within spawn, teleports you into the world'),
+       ('kollusion-commands', '/mzlives', 'checks your currently available mz-lives'),
+       ('kollusion-commands', '/mzrevive', 'removes active alt-ban from player using your mz-lives, if available');
 CREATE OR REPLACE FUNCTION get_tips()
     RETURNS TABLE
             (
