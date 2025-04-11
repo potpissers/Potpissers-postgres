@@ -2630,7 +2630,7 @@ CREATE OR REPLACE FUNCTION get_14_newest_network_supply_drops()
 AS
 $$
 SELECT supply_drops.id,
-       server_name,
+       servers.name,
        game_mode_name,
        start_timestamp,
        nullable_server_koth_id,
