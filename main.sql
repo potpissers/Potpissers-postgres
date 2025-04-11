@@ -281,8 +281,32 @@ CREATE UNLOGGED TABLE IF NOT EXISTS web_chat_history
 (
     user_uuid UUID,
     message   TEXT,
-    server_id INTEGER REFERENCES servers (id)
+    game_mode_name TEXT,
+    server_name    TEXT,
+    timestamp      TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE OR REPLACE FUNCTION get_14_newest_network_messages()
+    RETURNS INTEGER
+AS
+$$
+SELECT *
+FROM web_chat_history
+ORDER BY timestamp DESC
+LIMIT 14
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_14_newest_server_messages(game_mode_name TEXT, server_name TEXT)
+    RETURNS INTEGER
+AS
+$$
+SELECT *
+FROM web_chat_history
+WHERE web_chat_history.game_mode_name = get_14_newest_server_messages.game_mode_name
+  AND web_chat_history.server_name = get_14_newest_server_messages.server_name
+ORDER BY timestamp DESC
+LIMIT 14
+$$
+    LANGUAGE sql;
 
 CREATE UNLOGGED TABLE IF NOT EXISTS online_players
 (
@@ -2541,7 +2565,7 @@ SELECT server_koths_id,
        x,
        y,
        z,
-       game_mode_name,
+       servers.game_mode_name,
        servers.name                                                   AS server_name,
        arena_data.name                                                AS arena_name,
        creator
@@ -2551,8 +2575,8 @@ FROM koths
          JOIN arena_data ON arena_data.id = server_koths.arena_id
 WHERE servers.game_mode_name = get_14_newest_server_koths.game_mode_name
   AND servers.name = get_14_newest_server_koths.server_name
-  AND end_timestamp IS NOT NULL
-ORDER BY end_timestamp IS NULL, end_timestamp
+  AND end_timestamp IS NULL
+ORDER BY end_timestamp
 LIMIT 14
 $$
     LANGUAGE sql;
@@ -2580,6 +2604,106 @@ CREATE TABLE IF NOT EXISTS supply_drops
     FOREIGN KEY (nullable_server_koth_id) REFERENCES server_koths (id),
     FOREIGN KEY (server_id) REFERENCES servers (id)
 );
+CREATE OR REPLACE FUNCTION get_14_newest_network_supply_drops()
+    RETURNS TABLE
+            (
+                id                          INTEGER,
+                server_name                 TEXT,
+                game_mode_name              TEXT,
+                start_timestamp             TIMESTAMPTZ,
+
+                nullable_server_koth_id     INTEGER,
+                is_koth_movement_restricted BOOLEAN,
+                world_name                  TEXT,
+                x                           INTEGER,
+                y                           INTEGER,
+                z                           INTEGER,
+                radius                      INTEGER,
+                chest_open_timestamp        TIMESTAMPTZ,
+                loot_factor                 INTEGER,
+                restock_timer               INTEGER,
+                restock_amount              INTEGER,
+
+                end_timestamp               TIMESTAMPTZ,
+                win_message                 TEXT
+            )
+AS
+$$
+SELECT supply_drops.id,
+       server_name,
+       game_mode_name,
+       start_timestamp,
+       nullable_server_koth_id,
+       is_koth_movement_restricted,
+       world_name,
+       x,
+       y,
+       z,
+       radius,
+       chest_open_timestamp,
+       loot_factor,
+       restock_timer,
+       restock_amount,
+       end_timestamp,
+       win_message
+FROM supply_drops
+         JOIN servers ON supply_drops.server_id = servers.id
+WHERE end_timestamp IS NOT NULL
+ORDER BY end_timestamp
+LIMIT 14
+$$
+    LANGUAGE sql;
+CREATE OR REPLACE FUNCTION get_14_newest_network_supply_drops(server_name TEXT, game_mode_name TEXT)
+    RETURNS TABLE
+            (
+                id                          INTEGER,
+                server_name                 TEXT,
+                game_mode_name              TEXT,
+                start_timestamp             TIMESTAMPTZ,
+
+                nullable_server_koth_id     INTEGER,
+                is_koth_movement_restricted BOOLEAN,
+                world_name                  TEXT,
+                x                           INTEGER,
+                y                           INTEGER,
+                z                           INTEGER,
+                radius                      INTEGER,
+                chest_open_timestamp        TIMESTAMPTZ,
+                loot_factor                 INTEGER,
+                restock_timer               INTEGER,
+                restock_amount              INTEGER,
+
+                end_timestamp               TIMESTAMPTZ,
+                win_message                 TEXT
+            )
+AS
+$$
+SELECT supply_drops.id,
+       servers.name,
+       servers.game_mode_name,
+       start_timestamp,
+       nullable_server_koth_id,
+       is_koth_movement_restricted,
+       world_name,
+       x,
+       y,
+       z,
+       radius,
+       chest_open_timestamp,
+       loot_factor,
+       restock_timer,
+       restock_amount,
+       end_timestamp,
+       win_message
+FROM supply_drops
+         JOIN servers ON supply_drops.server_id = servers.id
+WHERE end_timestamp IS NOT NULL
+  AND servers.name = get_14_newest_network_supply_drops.server_name
+  AND servers.game_mode_name = get_14_newest_network_supply_drops.game_mode_name
+ORDER BY end_timestamp
+LIMIT 14
+$$
+    LANGUAGE sql;
 CREATE TABLE IF NOT EXISTS supply_drop_rounds
 (
     id                              INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
