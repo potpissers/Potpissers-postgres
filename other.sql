@@ -185,7 +185,12 @@ VALUES ('potpissers', 'piglin combat logger',
        ('kollusion-commands', '/mzlives', 'checks your currently available mz-lives'),
        ('kollusion-commands', '/mzrevive', 'removes active alt-ban from player using your mz-lives, if available');
 CREATE OR REPLACE FUNCTION get_tips()
-    RETURNS SETOF server_tips
+    RETURNS TABLE
+            (
+                game_mode_name TEXT,
+                tip_title      TEXT,
+                tip_message    TEXT
+            )
 AS
 $$
 SELECT *
