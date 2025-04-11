@@ -286,7 +286,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS web_chat_history
     timestamp      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE OR REPLACE FUNCTION get_14_newest_network_messages()
-    RETURNS INTEGER
+    RETURNS SETOF web_chat_history
 AS
 $$
 SELECT *
@@ -296,7 +296,7 @@ LIMIT 14
 $$
     LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_14_newest_server_messages(game_mode_name TEXT, server_name TEXT)
-    RETURNS INTEGER
+    RETURNS SETOF web_chat_history
 AS
 $$
 SELECT *
