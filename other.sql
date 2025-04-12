@@ -106,29 +106,27 @@ VALUES ('potpissers', 'piglin combat logger',
        ('cubecore-commands', '/hcflives', 'checks your currently available hcf-lives'),
        ('cubecore-commands', '/hcfrevive', 'revives deathbanned player using your hcf-lives, if available'),
 
-       ('cubecore_classes',
-        'class items: right click to activate, hold item or attack players to accelerate cooldown + activate hold effects if item has them', '- sugar: speed. miner @ 150 diamonds + all other classes
-                    - feather: jump boost. spam right-click to stack jump boost level in exchange for opple/totem cooldown. doesn''t get hold cooldown boost. miner @ 200 diamonds + all other classes
-                    - phantom membrane: slow-falling hold + levitation active. same spam mechanic as feather. doesn''t get hold cooldown boost. miner @ 200 diamonds + all other classes
-                    - ender eye: invisibility. miner below y16, above y16 @ 50 diamonds + all other classes
+       ('cubecore_classes_items', 'class items', 'right click to activate, hold item or attack players to accelerate cooldown + activate hold effects if item has them'),
+       ('cubecore_classes_items', 'sugar', 'speed. miner @ 150 diamonds + all other classes'),
+       ('cubecore_classes_items', 'feather', 'jump boost. spam right-click to stack jump boost level in exchange for opple/totem cooldown. doesn''t get hold cooldown boost. miner @ 200 diamonds + all other classes'),
+       ('cubecore_classes_items', 'phantom membrane', 'slow-falling hold + levitation active. same spam mechanic as feather. doesn''t get hold cooldown boost. miner @ 200 diamonds + all other classes'),
+       ('cubecore_classes_items', 'ender eye', 'invisibility. miner below y16, above y16 @ 50 diamonds + all other classes'),
+       ('cubecore_classes_items', 'blaze powder', 'strength. bard/warrior'),
+       ('cubecore_classes_items', 'iron ingot', 'resistance. bard/warrior'),
+       ('cubecore_classes_items', 'ghast tear', 'regen. bard/warrior'),
+       ('cubecore_classes_items', 'glistering melon slice', 'health boost hold + instant health active. bard/warrior'),
+       ('cubecore_classes_items', 'magma cream', 'fire resistance. bard/warrior/miner below y16, above y16 @ 100 diamonds'),
+       ('cubecore_classes_items', 'pufferfish', 'water-breathing. bard/warrior/miner below y16, above y16 @ 100 diamonds'),
+       ('cubecore_classes_items', 'gold ingot', 'bard/warrior/miner: can use raw gold, upgrades @ 300 diamonds'),
+       ('cubecore_classes_items', 'wheat', 'exhaustion removal hold + saturation active. bard/warrior/miner @ 250 diamonds'),
+       ('cubecore_classes_items', 'fermented spider eye', 'slowness. all classes except miner'),
+       ('cubecore_classes_items', 'bowl', 'hunger. all classes except miner'),
+       ('cubecore_classes_items', 'ink sac', 'weakness. bard/warrior/tag archer'),
+       ('cubecore_classes_items', 'spider eye', 'poison. warrior/rogue^/damage archer'),
+       ('cubecore_classes_items', 'rabbit''s foot', 'slow-falling debuff. warrior/rogue^/damage archer'),
+       ('cubecore_classes_items', 'coal', 'wither. warrior/rogue^/damage archer'),
+       ('cubecore_classes_items', 'charcoal', 'miner''s fatigue. bard/warrior/miner @ 300 diamonds'),
 
-                    - blaze powder: strength. bard/warrior
-                    - iron ingot: resistance. bard/warrior
-                    - ghast tear: regen. bard/warrior
-
-                    - glistering melon slice: health boost hold + instant health active. bard/warrior
-                    - magma cream: fire resistance. bard/warrior/miner below y16, above y16 @ 100 diamonds
-                    - pufferfish: water-breathing. bard/warrior/miner below y16, above y16 @ 100 diamonds
-                    - gold ingot: bard/warrior/miner: can use raw gold, upgrades @ 300 diamonds
-                    - wheat: exhaustion removal hold + saturation active. bard/warrior/miner @ 250 diamonds
-
-                    - fermented spider eye: slowness. all classes except miner
-                    - bowl: hunger. all classes except miner
-                    - ink sac: weakness. bard/warrior/tag archer
-                    - spider eye: poison. warrior/rogue^/damage archer
-                    - rabbit''s foot. slow-falling debuff. warrior/rogue^/damage archer
-                    - coal: wither. warrior/rogue^/damage archer
-                    - charcoal: miner''s fatigue. bard/warrior/miner @ 300 diamonds'),
        ('cubecore_classes', 'tag archer', '- armor bonus
                     - passive speed 1 + extra speed on hit
                     - class items: use /classitems
