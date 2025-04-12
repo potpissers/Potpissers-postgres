@@ -2443,7 +2443,7 @@ WITH cte AS (SELECT server_koths.id
                       JOIN arena_data ON server_koths.arena_id = arena_data.id
              WHERE name = koth_name
                AND server_koths.server_id = handle_server_koth_toggle_return_star.server_id),
-     _ AS (UPDATE koths SET end_timestamp = NOW() WHERE end_timestamp IS NULL AND
+     _ AS (DELETE FROM koths WHERE end_timestamp IS NULL AND
                                                         server_koths_id = (SELECT id FROM cte))
 INSERT
 INTO koths (server_koths_id, loot_factor, max_timer, is_movement_restricted)
