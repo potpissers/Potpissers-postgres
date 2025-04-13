@@ -169,6 +169,8 @@ VALUES ('potpissers', 'piglin combat logger',
                     - mining past diamond ore thresholds upgrades your miner class'' abilities: use /classitems
                     - 50 ores mined: passive invisibility below y 16. 100 ores mined: passive fire resistance + water-breathing below y 16. 150 ores mined: passive speed 1 + sugar class item unlocked. 200 ores mined: feather/membrane class items unlocked. 250 ores mined: wheat class item unlocked + passive saturation below y 16, 300 ores mined: upgraded haste + miner''s fatigue class item unlocked. 350 ores mined: glow ink sac class item unlocked'),
 
+       ('cubecore_recipes', 'potpissers recipes',
+        'all custom recipes are shapeless, just slam the ingredients into the crafting window'),
        ('cubecore_recipes', 'recipe: grapple', '- 1.)
                                                1 fishing rod, 4 iron blocks, 4 copper blocks:
                                                ⬜️ 🟧️ ⬜️
@@ -270,8 +272,6 @@ VALUES ('potpissers', 'piglin combat logger',
         🟦️️️️️️️ ⬜️️️️️️️️ 🟦️️️️️️️
         ⬜️️️️ 🟧️️️️️ ⬜️️️
         ⚫️️️️️ ⬜️️️️️️ ⚫️️️️️'),
-       ('cubecore_recipes', 'potpissers recipes',
-        'all custom recipes are shapeless, just slam the ingredients into the crafting window'),
 
        ('kollusion', 'kollusion enchanted repair buff',
         'crafting menu repairing passes the least common enchantments to the result item. (repairing two ff4 boots together doesn''t remove the ff4)'),
