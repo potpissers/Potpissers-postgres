@@ -183,15 +183,15 @@ VALUES ('potpissers', 'piglin combat logger',
                                                               🟨️ 🟨️ 🟨️️
                                                               🟨️️ 🍎 🟨️️
                                                               🟨️️ 🟨️️ 🟨️️'),
-       ('cubecore_recipes', 'recipe: totem of undying', '1 apple, 8 emerald blocks
-                                                        🟩️ 🟩️ 🟩️
-                                                        🟩️ 🍎 🟩️
-                                                        🟩️ 🟩️ 🟩️'),
-       ('cubecore_recipes', 'recipe: reverted opple', '1 enchanted golden apple, 8 emerald blocks
+       ('cubecore_recipes', 'recipe: totem of undying', '1 golden apple, 3 emerald blocks, 3 gold ingots
+                                                        🟩️️️️️️ 🟩️️️️ 🟩️️️️️️️
+                                                        🟡️️️️ 🍊️️️ 🟡️️️️
+                                                        ❌️️️️ 🟡️️️️ ❌️️️️'),
+       ('cubecore_recipes', 'recipe: cubecore reverted opple', '1 enchanted golden apple, 8 emerald blocks
                                                       🟩️ 🟩️ 🟩️
                                                       🟩️ 🍊 🟩️
                                                       🟩️ 🟩️ 🟩️'),
-       ('cubecore_recipes', 'recipe: opple totem', '1 totem of undying, 8 gold blocks
+       ('cubecore_recipes', 'recipe: cubecore opple totem', '1 totem of undying, 8 gold blocks
                                                    🟨️️ 🟨️️ 🟨️️
                                                    🟨️️ 🗿 🟨️️
                                                    🟨️️ 🟨️️ 🟨️️'),
