@@ -307,6 +307,18 @@ ORDER BY timestamp DESC
 LIMIT 14
 $$
     LANGUAGE sql;
+CREATE OR REPLACE PROCEDURE handle_insert_web_chat_history(user_uuid UUID, message TEXT, game_mode_name TEXT, server_name TEXT)
+AS
+$$
+WITH cte AS (INSERT INTO web_chat_history (user_uuid, message, game_mode_name, server_name)
+    VALUES (handle_insert_web_chat_history.user_uuid, handle_insert_web_chat_history.message,
+            handle_insert_web_chat_history.game_mode_name, handle_insert_web_chat_history.server_name) RETURNING *)
+SELECT pg_notify('chat', (SELECT json_build_object('uuid', cte.user_uuid, 'message', cte.message, 'game_mode_name',
+                                                   cte.game_mode_name, 'server_name',
+                                                   cte.server_name)::TEXT
+                          FROM cte))
+$$
+    LANGUAGE sql;
 
 CREATE UNLOGGED TABLE IF NOT EXISTS online_players
 (
