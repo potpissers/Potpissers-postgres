@@ -118,7 +118,7 @@ CREATE UNLOGGED TABLE line_items
 );
 INSERT INTO line_items (id, game_mode_name, line_item_name, value_in_cents, description, is_plural)
 VALUES (0, 'hcf', 'life', 400,
-        '/revive (username). removes deathban (alts aren''t affected). current revive life cost: /lives', true),
+        '/revive (username). removes deathban (alts aren''t affected). current revive cost: /lives', true),
        (1, 'hcf', 'basic rank', 800, 'green name, basic server slot, and revive cost + deathban reduced to 80%', false),
        (2, 'hcf', 'gold rank', 1600, 'yellow name, gold server slot, and revive cost + deathban reduced to 60%', false),
        (3, 'hcf', 'diamond rank', 2400, 'aqua name, diamond server slot, and revive cost + deathban reduced to 40%',
