@@ -169,6 +169,108 @@ VALUES ('potpissers', 'piglin combat logger',
                     - mining past diamond ore thresholds upgrades your miner class'' abilities: use /classitems
                     - 50 ores mined: passive invisibility below y 16. 100 ores mined: passive fire resistance + water-breathing below y 16. 150 ores mined: passive speed 1 + sugar class item unlocked. 200 ores mined: feather/membrane class items unlocked. 250 ores mined: wheat class item unlocked + passive saturation below y 16, 300 ores mined: upgraded haste + miner''s fatigue class item unlocked. 350 ores mined: glow ink sac class item unlocked'),
 
+       ('cubecore_recipes', 'recipe: grapple', '- 1.)
+                                               1 fishing rod, 4 iron blocks, 4 copper blocks:
+                                               ⬜️ 🟧️ ⬜️
+                                               🟧️ 🎣 🟧️
+                                               ⬜️ 🟧️ ⬜️
+                                               - 2.)
+                                               1 fishing rod, 8 iron blocks
+                                               ⬜️ ⬜️ ⬜️
+                                               ⬜️ 🎣 ⬜️
+                                               ⬜️ ⬜️ ⬜️'),
+       ('cubecore_recipes', 'recipe: enchanted golden apple', '1 apple, 8 gold blocks' ||
+                                                              '🟨️ 🟨️ 🟨️️' ||
+                                                              '🟨️️ 🍎 🟨️️' ||
+                                                              '🟨️️ 🟨️️ 🟨️️'),
+       ('cubecore_recipes', 'recipe: totem of undying', '1 apple, 8 emerald blocks' ||
+                                                        '🟩️ 🟩️ 🟩️' ||
+                                                        '🟩️ 🍎 🟩️' ||
+                                                        '🟩️ 🟩️ 🟩️'),
+       ('cubecore_recipes', 'recipe: reverted opple', '1 enchanted golden apple, 8 emerald blocks' ||
+                                                      '🟩️ 🟩️ 🟩️' ||
+                                                      '🟩️ 🍊 🟩️' ||
+                                                      '🟩️ 🟩️ 🟩️'),
+       ('cubecore_recipes', 'recipe: opple totem', '1 totem of undying, 8 gold blocks' ||
+                                                   '🟨️️ 🟨️️ 🟨️️' ||
+                                                   '🟨️️ 🗿 🟨️️' ||
+                                                   '🟨️️ 🟨️️ 🟨️️'),
+       ('cubecore_recipes', 'recipe: elytra', '4 diamond blocks, 4 phantom membrane, 1 popped chorus fruit' ||
+                                              '👻 🟦️️ 👻' ||
+                                              '🟦️ 🍍 🟦️' ||
+                                              '👻 🟦️ 👻'),
+       ('cubecore_recipes', 'recipe: trident',
+        '4 diamond blocks, 2 prismarine shards, 1 prismarine crystal, 1 nautilus shell, 1 ink sac' ||
+        '🟦️ ❄️ 🟦️' ||
+        '🪨 🐚 🪨' ||
+        '🟦️ 🫟 🟦️'),
+       ('cubecore_recipes', 'recipe: antidote honey', '- 1.) ' ||
+                                                      '1 honey bottle, 8 lapis lazuli' ||
+                                                      '🔹 🔹 🔹' ||
+                                                      '🔹 🍯 🔹' ||
+                                                      '🔹 🔹 🔹' ||
+                                                      '- 2.) ' ||
+                                                      '1 honey bottle, 8 coal' ||
+                                                      '▪️ ▪️ ▪️' ||
+                                                      '▪️ 🍯 ▪️' ||
+                                                      '▪️ ▪️ ▪️' ||
+                                                      '- 3.) ' ||
+                                                      '1 honey bottle, 4 lapis lazuli, 4 coal' ||
+                                                      '🔹 ▪️ 🔹' ||
+                                                      '▪️ 🍯️ ▪️' ||
+                                                      '🔹️ ▪️ 🔹️'),
+       ('cubecore_recipes', 'recipe: antidote milk', '- 1.) ' ||
+                                                     '1 milk bucket, 8 lapis lazuli blocks' ||
+                                                     '🟦️ 🟦️ 🟦️' ||
+                                                     '🟦️ 🍯 🟦️' ||
+                                                     '🟦️ 🟦️ 🟦️' ||
+                                                     '- 2.) ' ||
+                                                     '1 milk bucket, 8 coal blocks' ||
+                                                     '⬛️ ⬛️ ⬛️' ||
+                                                     '⬛️ 🍯 ⬛️' ||
+                                                     '⬛️ ⬛️ ⬛️' ||
+                                                     '- 3.) ' ||
+                                                     '1 milk bucket, 4 lapis lazuli blocks, 4 coal blocks' ||
+                                                     '🟦️ ⬛️ 🟦️' ||
+                                                     '⬛️ 🍯️ ⬛️' ||
+                                                     '🟦️ ⬛️ 🟦️'),
+       ('cubecore_recipes', 'recipe: emerald/emerald block',
+        '- 1.) ' ||
+        '1 diamond/block, 1 iron ingot/block, 1 copper ingot/block, respectively' ||
+        '❌️ ❌️ ❌️' ||
+        '🟦️️ ⬜️️ 🟧️️️' ||
+        '❌️ ❌️ ❌️' ||
+        '- 2.) ' ||
+        '2 gold ingots/blocks, respectively' ||
+        '❌️ ❌️ ❌️' ||
+        '🟨️️ 🟨️️ ❌️' ||
+        '❌️ ❌️ ❌️'),
+       ('cubecore_recipes', 'recipe: coal block', -- TODO -> potpissers recipes. this + opple (?) at least
+        '9 charcoal' ||
+        '▪️️ ▪️️ ▪️️' ||
+        '▪️️ ▪️️ ▪️️' ||
+        '▪️️ ▪️️ ▪️️'),
+       ('cubecore_recipes', 'recipe: netherite upgrade smithing template',
+        '7 diamonds, 1 netherrack' ||
+        '💎️️ ❌️️️ 💎️️' ||
+        '💎️️ 🟫️️ 💎️️' ||
+        '💎️ 💎️ 💎️️'),
+       ('cubecore_recipes', 'recipe: heart of the sea',
+        '8 diamond blocks, 1 nautilus shell' ||
+        '🟦️️️ 🟦️️️️ 🟦️️️' ||
+        '🟦️️️ 🐚️️ 🟦️️' ||
+        '🟦️️ 🟦️️️ 🟦️️️'),
+       ('cubecore_recipes', 'recipe: netherite repair brick',
+        '1 gold ingot, 1 nether brick, one diamond' ||
+        '❌️️️️️️ ❌️️️️️️️ ❌️️️️️️' ||
+        '🟡️️️ 👞️️ 💎️️' ||
+        '❌️️️️️ ❌️️️️️️ ❌️️️️️'),
+       ('cubecore_recipes', 'recipe: heavy core',
+        '2 diamond blocks, 2 netherite ingots, 4 iron blocks, 1 copper block' ||
+        '🟦️️️️️️️ ⬜️️️️️️️️ 🟦️️️️️️️' ||
+        '⬜️️️️ 🟧️️️️️ ⬜️️️' ||
+        '⚫️️️️️ ⬜️️️️️️ ⚫️️️️️'),
+
        ('kollusion', 'kollusion enchanted repair buff',
         'crafting menu repairing passes the least common enchantments to the result item. (repairing two ff4 boots together doesn''t remove the ff4)'),
        ('kollusion', 'kollusion elytras', 'found elytras break very quickly'),
