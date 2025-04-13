@@ -183,9 +183,9 @@ VALUES ('potpissers', 'piglin combat logger',
                                                               🟨️ 🟨️ 🟨️️
                                                               🟨️️ 🍎 🟨️️
                                                               🟨️️ 🟨️️ 🟨️️'),
-       ('cubecore_recipes', 'recipe: totem of undying', '1 golden apple, 3 emerald blocks, 3 gold ingots
+       ('cubecore_recipes', 'recipe: totem of undying', '3 emerald blocks, 4 gold ingots
                                                         🟩️️️️️️ 🟩️️️️ 🟩️️️️️️️
-                                                        🟡️️️️ 🍊️️️ 🟡️️️️
+                                                        🟡️️️️ 🟡️️️️ 🟡️️️️
                                                         ❌️️️️ 🟡️️️️ ❌️️️️'),
        ('cubecore_recipes', 'recipe: cubecore reverted opple', '1 enchanted golden apple, 8 emerald blocks
                                                       🟩️ 🟩️ 🟩️
@@ -270,6 +270,8 @@ VALUES ('potpissers', 'piglin combat logger',
         🟦️️️️️️️ ⬜️️️️️️️️ 🟦️️️️️️️
         ⬜️️️️ 🟧️️️️️ ⬜️️️
         ⚫️️️️️ ⬜️️️️️️ ⚫️️️️️'),
+       ('cubecore_recipes', 'potpissers recipes',
+        'all custom recipes are shapeless, just slam the ingredients into the crafting window'),
 
        ('kollusion', 'kollusion enchanted repair buff',
         'crafting menu repairing passes the least common enchantments to the result item. (repairing two ff4 boots together doesn''t remove the ff4)'),
