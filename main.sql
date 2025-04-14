@@ -1916,7 +1916,7 @@ PERFORM pg_notify('deaths',
                                            insert_user_death_return_id.killer_uuid)::TEXT));
     RETURN death_id;
 END
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql; -- TODO this piece of fucking shit pg_notify function will literally just not work if i use it in a cte
 CREATE OR REPLACE FUNCTION get_user_kill_streak(user_uuid UUID, server_id INTEGER)
     RETURNS INTEGER AS
 $$
