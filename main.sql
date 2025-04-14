@@ -352,19 +352,7 @@ CREATE OR REPLACE PROCEDURE handle_upsert_online_player(user_uuid UUID, user_nam
                                                         faction_uuid UUID)
 AS
 $$
-WITH _ AS (SELECT pg_notify('offline', (SELECT json_build_object('uuid', online_players.user_uuid, 'name',
-                                                                 online_players.user_name, 'game_mode_name',
-                                                                 online_players.game_mode_name, 'server_name',
-                                                                 online_players.server_name,
-                                                                 'active_faction', online_players.faction_uuid,
-                                                                 'network_join', network_join, 'server_join',
-                                                                 server_join)::TEXT
-                                        FROM online_players
-                                        WHERE online_players.user_uuid = handle_upsert_online_player.user_uuid))
-           WHERE EXISTS(SELECT *
-                        FROM online_players
-                        WHERE online_players.user_uuid = handle_upsert_online_player.user_uuid)),
-     cte AS (INSERT
+WITH cte AS (INSERT
          INTO online_players (user_uuid, user_name, game_mode_name, server_name, faction_uuid)
              VALUES (handle_upsert_online_player.user_uuid, handle_upsert_online_player.user_name,
                      handle_upsert_online_player.game_mode_name, handle_upsert_online_player.server_name,
