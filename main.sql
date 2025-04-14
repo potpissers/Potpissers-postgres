@@ -1887,6 +1887,7 @@ CREATE OR REPLACE FUNCTION insert_user_death_return_id(
 )
     RETURNS INTEGER AS
 $$
+WITH cte AS (
 INSERT INTO user_deaths (server_id, victim_user_fight_id, victim_uuid,
                          bukkit_victim_inventory,
                          death_world, death_x, death_y, death_z, death_message,
@@ -1898,7 +1899,25 @@ VALUES (insert_user_death_return_id.server_id, insert_user_death_return_id.victi
         insert_user_death_return_id.death_y, insert_user_death_return_id.death_z,
         insert_user_death_return_id.death_message, insert_user_death_return_id.killer_uuid,
         insert_user_death_return_id.bukkit_kill_weapon, insert_user_death_return_id.bukkit_killer_inventory)
-RETURNING id
+    RETURNING *),
+     foo AS (SELECT * FROM servers WHERE id = server_id),
+     _ AS (SELECT pg_notify('deaths'
+                      , (SELECT json_build_object('game_mode_name'
+                                    , (SELECT game_mode_name FROM foo)
+                                    , 'server_name'
+                                    , (SELECT name FROM foo)
+                                    , 'victim_user_fight_id'
+                                    , cte.victim_user_fight_id
+                                    , 'timestamp'
+                                    , cte.timestamp
+                                    , 'victim_uuid'
+                                    , cte.victim_uuid,
+                                                  'death_world_name', cte.death_world, 'death_x', cte.death_x,
+                                                  'death_y', cte.death_y, 'death_z',
+                                                  cte.death_z, 'death_message', cte.death_message, 'killer_uuid',
+                                                  cte.killer_uuid)::TEXT
+                         FROM cte)))
+    SELECT id FROM cte
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_user_kill_streak(user_uuid UUID, server_id INTEGER)
     RETURNS INTEGER AS
