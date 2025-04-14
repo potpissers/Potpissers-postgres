@@ -1443,6 +1443,7 @@ FROM factions
          JOIN LATERAL get_dtr_data(servers.id, party_uuid) ON TRUE
 WHERE servers.game_mode_name = get_7_factions.game_mode_name
   AND servers.name = server_name
+  AND is_disbanded = false
 LIMIT 7
 $$
     LANGUAGE sql;
