@@ -1902,7 +1902,7 @@ BEGIN
             insert_user_death_return_id.death_message, insert_user_death_return_id.killer_uuid,
             insert_user_death_return_id.bukkit_kill_weapon, insert_user_death_return_id.bukkit_killer_inventory)
     RETURNING id INTO death_id;
-SELECT pg_notify('deaths',
+PERFORM pg_notify('deaths',
                  (SELECT json_build_object('game_mode_name', (SELECT game_mode_name FROM servers WHERE id = server_id),
                                            'server_name',
                                            (SELECT name FROM servers WHERE id = server_id), 'victim_user_fight_id',
