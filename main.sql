@@ -1887,31 +1887,36 @@ CREATE OR REPLACE FUNCTION insert_user_death_return_id(
 )
     RETURNS INTEGER AS
 $$
-WITH cte AS (
-INSERT INTO user_deaths (server_id, victim_user_fight_id, victim_uuid,
-                         bukkit_victim_inventory,
-                         death_world, death_x, death_y, death_z, death_message,
-                         killer_uuid, bukkit_kill_weapon,
-                         bukkit_killer_inventory)
-VALUES (insert_user_death_return_id.server_id, insert_user_death_return_id.victim_user_fight_id,
-        insert_user_death_return_id.victim_uuid, insert_user_death_return_id.bukkit_victim_inventory,
-        insert_user_death_return_id.death_world, insert_user_death_return_id.death_x,
-        insert_user_death_return_id.death_y, insert_user_death_return_id.death_z,
-        insert_user_death_return_id.death_message, insert_user_death_return_id.killer_uuid,
-        insert_user_death_return_id.bukkit_kill_weapon, insert_user_death_return_id.bukkit_killer_inventory)
-    RETURNING *),
-     foo AS (SELECT * FROM servers WHERE id = server_id)
+DECLARE
+    death_id INTEGER;
+BEGIN
+    INSERT INTO user_deaths (server_id, victim_user_fight_id, victim_uuid,
+                             bukkit_victim_inventory,
+                             death_world, death_x, death_y, death_z, death_message,
+                             killer_uuid, bukkit_kill_weapon,
+                             bukkit_killer_inventory)
+    VALUES (insert_user_death_return_id.server_id, insert_user_death_return_id.victim_user_fight_id,
+            insert_user_death_return_id.victim_uuid, insert_user_death_return_id.bukkit_victim_inventory,
+            insert_user_death_return_id.death_world, insert_user_death_return_id.death_x,
+            insert_user_death_return_id.death_y, insert_user_death_return_id.death_z,
+            insert_user_death_return_id.death_message, insert_user_death_return_id.killer_uuid,
+            insert_user_death_return_id.bukkit_kill_weapon, insert_user_death_return_id.bukkit_killer_inventory)
+    RETURNING id INTO death_id;
 SELECT pg_notify('deaths',
-                 (SELECT json_build_object('game_mode_name', (SELECT game_mode_name FROM foo), 'server_name',
-                                           (SELECT name FROM foo), 'victim_user_fight_id',
-                                           cte.victim_user_fight_id, 'timestamp', cte.timestamp,
-                                           'victim_uuid', cte.victim_uuid, 'death_world_name',
-                                           cte.death_world, 'death_x', cte.death_x,
-                                           'death_y', cte.death_y, 'death_z',
-                                           cte.death_z, 'death_message', cte.death_message, 'killer_uuid',
-                                           cte.killer_uuid)::TEXT
-                  FROM cte))
-$$ LANGUAGE sql;
+                 (SELECT json_build_object('game_mode_name', (SELECT game_mode_name FROM servers WHERE id = server_id),
+                                           'server_name',
+                                           (SELECT name FROM servers WHERE id = server_id), 'victim_user_fight_id',
+                                           insert_user_death_return_id.victim_user_fight_id, 'timestamp', null,
+                                           'victim_uuid', insert_user_death_return_id.victim_uuid, 'death_world_name',
+                                           insert_user_death_return_id.death_world, 'death_x',
+                                           insert_user_death_return_id.death_x,
+                                           'death_y', insert_user_death_return_id.death_y, 'death_z',
+                                           insert_user_death_return_id.death_z, 'death_message',
+                                           insert_user_death_return_id.death_message, 'killer_uuid',
+                                           insert_user_death_return_id.killer_uuid)::TEXT));
+    SELECT death_id;
+END
+$$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION get_user_kill_streak(user_uuid UUID, server_id INTEGER)
     RETURNS INTEGER AS
 $$
