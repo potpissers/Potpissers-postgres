@@ -1914,7 +1914,7 @@ PERFORM pg_notify('deaths',
                                            insert_user_death_return_id.death_z, 'death_message',
                                            insert_user_death_return_id.death_message, 'killer_uuid',
                                            insert_user_death_return_id.killer_uuid)::TEXT));
-    SELECT death_id; --
+    RETURN death_id;
 END
 $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION get_user_kill_streak(user_uuid UUID, server_id INTEGER)
