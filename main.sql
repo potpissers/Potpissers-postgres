@@ -1901,24 +1901,9 @@ VALUES (insert_user_death_return_id.server_id, insert_user_death_return_id.victi
         insert_user_death_return_id.bukkit_kill_weapon, insert_user_death_return_id.bukkit_killer_inventory)
     RETURNING *),
      foo AS (SELECT * FROM servers WHERE id = server_id),
-     _ AS (SELECT pg_notify('deaths', convert_from(
-             substring(convert_to((SELECT json_build_object('game_mode_name'
-                                              , (SELECT game_mode_name FROM foo)
-                                              , 'server_name'
-                                              , (SELECT name FROM foo)
-                                              , 'victim_user_fight_id'
-                                              , cte.victim_user_fight_id
-                                              , 'timestamp'
-                                              , cte.timestamp
-                                              , 'victim_uuid'
-                                              , cte.victim_uuid,
-                                                            'death_world_name', cte.death_world, 'death_x', cte.death_x,
-                                                            'death_y', cte.death_y, 'death_z',
-                                                            cte.death_z, 'death_message', cte.death_message, 'killer_uuid',
-                                                            cte.killer_uuid)::TEXT
-                                   FROM cte), 'UTF8') FOR 7000),
-             'UTF8'
-                                      )))
+     _ AS (SELECT pg_notify('deaths',
+                            (SELECT json_build_object('game_mode_name', (SELECT game_mode_name FROM foo))::TEXT
+                             FROM cte)))
     SELECT id FROM cte
 $$ LANGUAGE sql;
 CREATE OR REPLACE FUNCTION get_user_kill_streak(user_uuid UUID, server_id INTEGER)
