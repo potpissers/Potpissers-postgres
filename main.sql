@@ -1916,7 +1916,7 @@ VALUES (insert_user_death_return_id.server_id, insert_user_death_return_id.victi
                                                             'death_y', cte.death_y, 'death_z',
                                                             cte.death_z, 'death_message', cte.death_message, 'killer_uuid',
                                                             cte.killer_uuid)::TEXT
-                                   FROM cte), 'UTF8') FOR 8000),
+                                   FROM cte), 'UTF8') FOR 7000),
              'UTF8'
                                       )))
     SELECT id FROM cte
